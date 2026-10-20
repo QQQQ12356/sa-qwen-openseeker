@@ -1,0 +1,128 @@
+{
+  "protocol": "openseeker-chatml-v1",
+  "arguments": {
+    "input": [
+      "/home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/data/raw/polar/openseeker_v1_data.jsonl"
+    ],
+    "source": "polar",
+    "output": "outputs/data/openseeker/polar_qwen35_16k",
+    "models": [
+      "Qwen/Qwen3.5-4B"
+    ],
+    "offline": true,
+    "workers": 8,
+    "max_length": 16384,
+    "seed": 42,
+    "val_fraction": 0.02,
+    "test_fraction": 0.02,
+    "require_correct": false,
+    "limit": null
+  },
+  "counts": {
+    "input": 11677,
+    "questions_with_cjk": 1429,
+    "train": 785,
+    "over_length": 10867,
+    "test": 14,
+    "validation": 11
+  },
+  "roles": {
+    "system": 11677,
+    "user": 548523,
+    "assistant": 548523
+  },
+  "tools": {
+    "search": 425318,
+    "visit": 113144
+  },
+  "correctness": {
+    "Correct": 4949,
+    "Incorrect": 6728
+  },
+  "distributions": {
+    "calls": {
+      "n": 11677,
+      "min": 0,
+      "max": 200,
+      "mean": 46.11304273357883,
+      "p50": 36.0,
+      "p90": 100.0,
+      "p95": 120.0,
+      "p99": 156.0,
+      "over_8192": 0,
+      "over_16384": 0,
+      "over_32768": 0,
+      "over_65536": 0
+    },
+    "messages": {
+      "n": 11677,
+      "min": 3,
+      "max": 403,
+      "mean": 94.94930204675859,
+      "p50": 75.0,
+      "p90": 203.0,
+      "p95": 241.0,
+      "p99": 315.0,
+      "over_8192": 0,
+      "over_16384": 0,
+      "over_32768": 0,
+      "over_65536": 0
+    },
+    "Qwen/Qwen3.5-4B/total": {
+      "n": 11677,
+      "min": 1193,
+      "max": 369679,
+      "mean": 74982.22951100454,
+      "p50": 68219.0,
+      "p90": 138705.19999999998,
+      "p95": 158143.8,
+      "p99": 194555.72,
+      "over_8192": 11470,
+      "over_16384": 10867,
+      "over_32768": 9328,
+      "over_65536": 6068
+    },
+    "Qwen/Qwen3.5-4B/observations": {
+      "n": 11677,
+      "min": 0,
+      "max": 335930,
+      "mean": 51523.620107904426,
+      "p50": 45286.0,
+      "p90": 97550.4,
+      "p95": 114863.59999999993,
+      "p99": 157527.2,
+      "over_8192": 11008,
+      "over_16384": 9936,
+      "over_32768": 7609,
+      "over_65536": 3511
+    },
+    "Qwen/Qwen3.5-4B/assistant": {
+      "n": 11677,
+      "min": 580,
+      "max": 75216,
+      "mean": 22413.15843110388,
+      "p50": 20022.0,
+      "p90": 42714.6,
+      "p95": 48545.2,
+      "p99": 57456.03999999999,
+      "over_8192": 9887,
+      "over_16384": 6967,
+      "over_32768": 2627,
+      "over_65536": 14
+    }
+  },
+  "inputs": [
+    {
+      "path": "/home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/data/raw/polar/openseeker_v1_data.jsonl",
+      "bytes": 3538289087,
+      "sha256": "7754aeadeaf93e2df336f30492c032232ad77ab7447e576d3639b6830a50c491"
+    }
+  ],
+  "tokenizers": {
+    "Qwen/Qwen3.5-4B": {
+      "name": "Qwen/Qwen3.5-4B",
+      "vocab_size": 248077,
+      "backend_sha256": "ffb7a28b27dabcc333662fd3e0b0005d9e79a1c22e31453ab5a3017fbd5f25c0"
+    }
+  }
+}

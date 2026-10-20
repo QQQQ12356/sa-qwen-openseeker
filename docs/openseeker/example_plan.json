@@ -1,0 +1,11 @@
+{
+  "run_dir": "/home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/experiments/qwen35_beacon_openseeker_L16384_r16_lr5e-05_s42_2d317e57a9_20261020T084126026165Z",
+  "train_command": [
+    "/home/huangzj/miniconda3/envs/search-comp-qwen3.5/bin/python",
+    "-m",
+    "search_comp.trainer.beacon_trainer",
+    "--config",
+    "/home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/experiments/qwen35_beacon_openseeker_L16384_r16_lr5e-05_s42_2d317e57a9_20261020T084126026165Z/train.yaml"
+  ],
+  "next": "/home/huangzj/miniconda3/envs/search-comp-qwen3.5/bin/python scripts/experiment.py train --run-dir /home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/experiments/qwen35_beacon_openseeker_L16384_r16_lr5e-05_s42_2d317e57a9_20261020T084126026165Z"
+}

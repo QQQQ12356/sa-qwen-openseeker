@@ -1,0 +1,56 @@
+# 修改此文件即可建立新的实验；plan 只写配置快照，train 才加载模型训练。
+model_family: qwen35                 # qwen3 / qwen35
+kind: beacon                         # beacon / plain
+data_mode: openseeker
+dataset: outputs/data/openseeker/polar_correct_qwen35_16k
+models:
+  qwen3: Qwen/Qwen3-4B-Thinking-2507
+  qwen35: Qwen/Qwen3.5-4B
+base_configs:
+  qwen3:
+    beacon: configs/train/beacon_qwen3_searchr1.yaml
+    plain: configs/train/qwen3_plain_sft.yaml
+  qwen35:
+    beacon: configs/train/beacon_qwen35_searchr1.yaml
+    plain: configs/train/qwen35_plain_sft.yaml
+training:
+  max_length: 16384                  # 完整序列上限，不截断；80GB 首轮建议 16k
+  learning_rate: 0.00005
+  seed: 42
+  num_epochs: 1
+  max_train_steps: null
+  grad_accum_steps: 4
+  per_device_batch_size: 1
+  use_lora: true
+  lora_r: 16
+  lora_alpha: 32
+  optim: adamw_bnb_8bit
+  use_bf16: true
+  logging_steps: 5
+  log_freq_steps: 5
+  save_freq_steps: 200
+  eval_steps: 200
+  length_diagnostics_samples: 128
+beacon:
+  beacon_ratio: 16
+  beacon_information_mode: whole
+  beacon_window_enabled: false
+  beacon_doc_region_split: false
+  beacon_question_memory_v1: false
+  beacon_ce_loss_weight: 1.0
+  beacon_continuation_loss_weight: 0.1
+  beacon_information_loss: false
+  beacon_output_distill_weight: 0.0  # 先做 CE+续写；加 0.1 将同时加载完整 teacher
+  beacon_readout_distill_weight: 0.0
+  beacon_loss_chunk_size: 32
+  beacon_checkpoint_loss: true
+  beacon_cpu_offload_activations: true
+evaluation:
+  backend: replay                    # http：工具服务；corpus：独立本地语料
+  corpus: null                       # corpus 后端的独立 JSONL 语料
+  endpoint: null                     # http://127.0.0.1:8080/tool
+  limit: 100
+  max_context: 16384
+  max_new_tokens: 8192
+  max_tool_tokens: 16384
+  max_turns: 32

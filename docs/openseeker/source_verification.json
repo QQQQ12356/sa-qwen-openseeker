@@ -1,0 +1,8 @@
+{
+  "rows": 11677,
+  "semantic_equality": true,
+  "upstream_revision": "5970e581dc1548f37d846a1955cb8b651d2b657e",
+  "upstream_sha256": "7cc9aaabdaea00a3d410952c1ad978191440871e2424c86498723f8dc1e5d3f7",
+  "local_file": "outputs/data/raw/polar/openseeker_v1_data.jsonl",
+  "note": "Compared every parsed JSON object in order; formatting differs."
+}

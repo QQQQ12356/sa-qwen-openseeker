@@ -1,0 +1,127 @@
+# Qwen3.5 Beacon 训练 —— 使用 Search-R1 官方 SFT 轨迹（messages 格式）
+# 只压缩 <information> 检索文档块，损失只在 assistant 生成片段上计算。
+#
+# 训练数据（约 60MB，不在本仓库内）默认放在仓库相对路径下，需先自行获取：
+#   mkdir -p outputs/data/searchr1
+#   huggingface-cli download --repo-type dataset PeterJinGo/nq_hotpotqa_train \
+#       --include '*instruct-sft.jsonl' --local-dir outputs/data/searchr1
+# 已有该文件时也可以直接建软链，或命令行覆盖：
+#   --set train_data_path=/abs/path/to/qwen3-4b-instruct-sft.jsonl
+# LoRA 微调：冻结基础模型，只训练低秩适配器 + beacon 参数，降低显存开销。
+model_name_or_path: "Qwen/Qwen3.5-4B"
+# 优先替换为原生 SearchAgent SFT 的完整/已合并 checkpoint；词表必须与 student 一致。
+# 冻结 teacher 做一次完整轨迹前向，不写入 student checkpoint。
+distill_teacher_model_name_or_path: null  # 默认跟随 student，可覆盖为独立本地 plain checkpoint
+distill_teacher_device: "auto"  # auto 随模型用 GPU；cpu 节省 GPU 显存但降低速度
+data_mode: "searchr1"
+train_data_path: "outputs/data/searchr1/qwen3-4b-instruct-sft.jsonl"
+# 不截断 Search-R1 轨迹；每条样本保留完整的搜索、检索和回答过程。
+learning_rate: 5.0e-5
+weight_decay: 0.01
+optim: "adamw_bnb_8bit"
+lr_scheduler_type: "constant"
+warmup_steps: 0
+max_grad_norm: 1.0
+use_bf16: true
+# 训练终止方式二选一：
+#   方式一（按步数，推荐）：设置 max_train_steps，训练到恰好该优化器步数停止，覆盖 num_epochs。
+#     约 2.4w 条 / grad_accum 8 ≈ 3000 步/epoch，例如一份数据想用 1 epoch 就设 max_train_steps: 3000。
+#   方式二（按 epoch）:仅设 num_epochs（如上），按整个数据集轮次训练。
+# max_train_steps: 3000
+num_epochs: 1
+max_train_steps: 2000
+grad_accum_steps: 4
+# 实时日志：每多少优化器步打印一次 loss/grad_norm/lr（transformers.Trainer）
+logging_steps: 5
+save_freq_steps: 1000
+eval_steps: 10000
+val_data_path: null
+seed: 42
+shuffle_train_data: true  # false 按 JSONL 原始顺序；true 使用 seed 控制随机采样
+exp_name: "beacon_qwen35_searchr1"
+output_dir: "outputs"
+# LoRA 配置（use_lora: true 时生效）
+use_lora: true
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+# LoRA 目标模块（可在命令行用 --set lora_target_modules=[...] 覆盖）。
+# 默认：标准注意力 + MLP 投影。
+# 如只想适配窗口内 GatedDeltaNet 输入投影，改为：
+#   [in_proj_qkv, in_proj_a, in_proj_b]
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+# 混合 Beacon 使用显式跨窗状态，当前不做 Trainer 层级重计算。
+gradient_checkpointing: false
+# 启动时随机抽样多少条轨迹统计 token 长度，写入 dataset_summary.json。
+length_diagnostics_samples: 1000
+beacon:
+  enable_beacon: true
+  # 整段处理 information 和 keep；旧 window/stride 长度不再生效。
+  beacon_information_mode: whole
+  beacon_window_enabled: false
+  beacon_question_memory_v1: false
+  beacon_question_max_tokens: 128
+  beacon_readout_distill_weight: 0.0
+  # 所有 CE 有效 token 对齐完整上下文 teacher，KL 独立加在原损失上。
+  beacon_output_distill_weight: 0.1
+  beacon_output_distill_strategy: all
+  beacon_output_distill_doc_weighting: false  # true 启用第二阶段文档依赖 JS 加权
+  beacon_output_distill_doc_epsilon: 0.1
+  beacon_output_distill_temperature: 1.0
+  beacon_output_distill_tokens: 8
+  # 每轮 information 正文作为一个完整压缩区，不按子文档拆分。
+  beacon_doc_region_split: false
+  # 主 CE 与续写损失同时参与时按份额归一：
+  #   L = (w_ce·ce + w_cont·cont) / (w_ce + w_cont)
+  # 只有一项实际参与时直接乘其权重，例如 CE=0.1、续写=0 → 0.1·ce。
+  # 两项同时参与时：0.3 / 0.7 → 0.3·ce + 0.7·cont。
+  # 当前 1.0 / 0.1 → (ce + 0.1·cont)/1.1；无续写目标时为 1.0·ce。
+  # 两种蒸馏都是独立加项，不进这个分母。
+  # 仅输出 KD：CE、续写、readout 权重设 0，information_loss 设 false，output 权重保持正数。
+  beacon_ce_loss_weight: 1.0
+  beacon_continuation_loss_weight: 0.1
+  beacon_continuation_tokens: 4
+  # whole 模式对 information 正文做逐 token 因果续写；下列窗头选项不生效。
+  beacon_continuation_per_beacon: false
+  # 旧窗口长度字段仅用于兼容，不限制前向长度。
+  beacon_ratio: 16
+  # 提示词 / 模型输出 / 标签构成的连续 keep 段整段计算。
+  beacon_keep_window: 0
+  beacon_param: "q k v"
+  beacon_embed_init: "eos"
+  beacon_pos: "append"
+  beacon_attn: "full-coverage"
+  beacon_linear_writer_rank: 128
+  # 只对 labels != -100 的位置计算 LM head；分块越小峰值显存越低、速度略慢。
+  beacon_loss_chunk_size: 32
+  # 反向时重算每个 loss chunk 的 LM head，避免保存巨大 full-vocab logits。
+  beacon_checkpoint_loss: true
+  # 24GB 单卡长尾保护：只对超长样本把 autograd 保存激活卸载到 CPU。
+  beacon_cpu_offload_activations: true
+  beacon_cpu_offload_threshold: 2048
+  # 分段损失：控制「哪些片段计损失、各占多少权重」。
+  #   L = Σ w_i·CE_i / Σ w_i   （分母是权重和）
+  # 调权重只改变类别之间的份额，不会整体放大损失或有效学习率；
+  # enabled=false 等价于 weight=0（该类既不进分子也不进分母）。
+  # 全部 enabled + weight=1.0 时与不加权逐位一致（即下面的默认值）。
+  #
+  # 类别：think_tag / think_content / search_tag / search_content /
+  #       answer_tag / answer_content / other
+  # 实测 4000 条轨迹的监督 token 占比：thinking 87.3%、search query 3.5%、
+  # answer 仅 1.0%（平均 3.7 个 token）。answer 想占到损失的 ~10%，
+  # answer_content 需要设到 10~50 量级（算式见 docs/loss_segments.md）。
+  loss_segments:
+    think_tag:      {enabled: true, weight: 1.0}
+    think_content:  {enabled: true, weight: 1.0}
+    search_tag:     {enabled: true, weight: 1.0}
+    search_content: {enabled: true, weight: 1.0}
+    answer_tag:     {enabled: true, weight: 1.0}
+    answer_content: {enabled: true, weight: 1.0}
+    other:          {enabled: true, weight: 1.0}

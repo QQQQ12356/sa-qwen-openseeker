@@ -1,0 +1,37 @@
+{
+  "parent": "/home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/data/openseeker/polar_qwen35_16k",
+  "tokenizers": {
+    "Qwen/Qwen3.5-4B": {
+      "name": "Qwen/Qwen3.5-4B",
+      "vocab_size": 248077,
+      "backend_sha256": "ffb7a28b27dabcc333662fd3e0b0005d9e79a1c22e31453ab5a3017fbd5f25c0"
+    }
+  },
+  "arguments": {
+    "input": [
+      "/home/huangzj/proj/searchagent/sa-qwen-openseeker/outputs/data/raw/polar/openseeker_v1_data.jsonl"
+    ],
+    "source": "polar",
+    "output": "outputs/data/openseeker/polar_qwen35_16k",
+    "models": [
+      "Qwen/Qwen3.5-4B"
+    ],
+    "offline": true,
+    "workers": 8,
+    "max_length": 16384,
+    "seed": 42,
+    "val_fraction": 0.02,
+    "test_fraction": 0.02,
+    "require_correct": true,
+    "limit": null
+  },
+  "counts": {
+    "input": 11677,
+    "train": 644,
+    "over_length": 10867,
+    "test": 11,
+    "incorrect": 146,
+    "validation": 9
+  },
+  "note": "Derived selection; normalized full data and length distributions remain in parent."
+}
