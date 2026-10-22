@@ -37,6 +37,7 @@ beacon:
   beacon_window_enabled: false
   beacon_doc_region_split: false
   beacon_question_memory_v1: false
+  loss_segments: {}                 # OpenSeeker 要求统一 assistant 损失权重
   beacon_ce_loss_weight: 1.0
   beacon_continuation_loss_weight: 0.1
   beacon_information_loss: false

@@ -99,6 +99,20 @@ bash scripts/openseeker.sh train --run-dir "$RUN_DIR"
 
 80GB 建议先用 16k、batch=1、LoRA r=16、BF16、梯度累积 4，输出蒸馏先置 0。压缩历史 KV 不代表前向激活、保留的 reasoning、完整 teacher 都同步缩小；32k 或输出蒸馏应在目标 GPU 上实测再扩大。原 Beacon 不支持 Trainer 的普通层级 gradient checkpointing，依靠自身 loss 分块与激活 offload；没有宣称本配置必定满足 80GB 峰值。
 
+### 一键训练（在脚本中修改参数）
+
+编辑 `scripts/train_openseeker.sh` 顶部的 Python、GPU、ACTION，以及其中的 YAML 参数块，然后执行：
+
+```bash
+bash scripts/train_openseeker.sh
+```
+
+默认直接创建新实验并启动训练，不需要先运行 plan 或手动填写 run_dir。数据集必须事先准备好；相对路径以项目根目录为准。脚本支持从其他工作目录调用。
+
+脚本中的参数块是独立的实验入口配置，不读取 `configs/openseeker.yaml`；两者不需要同步修改。它仍复用 `base_configs` 指定的基础训练配置，最终生效的参数保存在实验目录的 `train.yaml`，脚本配置保存在 `source_config.yaml`。每次执行都会创建新实验，不用于断点续训。
+
+将脚本顶部 `ACTION="train"` 改为 `ACTION="plan"`，可只生成配置而不加载模型。OpenSeeker 的 `beacon.loss_segments: {}` 表示全部启用且权重为 1，避免继承基础配置中的非默认分段权重。日志和模型输出沿用上述实验目录结构。
+
 ## 4. 测试与推理
 
 ```bash
