@@ -115,6 +115,8 @@ bash scripts/train_openseeker.sh
 
 ## 4. 测试与推理
 
+完整配置、训练集拟合诊断、多卡并行、语料构建及三种后端的操作步骤见 [一键测试操作说明](openseeker_testing.md)。
+
 ```bash
 bash scripts/openseeker.sh test
 OMP_NUM_THREADS=2 "$PYTHON" -m pytest tests -q
@@ -131,7 +133,7 @@ bash scripts/test_openseeker.sh
 
 填写 `RUN_DIR="outputs/experiments/<训练实验名>"` 后，脚本自动从该实验的 `train_summary.json` 读取最终模型，从 `experiment.json` 读取模型类型和测试集。也可以单独填写 `MODEL_PATH` 测试已有的合并 checkpoint；`KIND`、`DATA` 支持覆盖自动读取的值，无实验目录时默认使用 Beacon 和 `polar_correct_qwen35_16k/test.jsonl`。
 
-Python 环境、GPU、`BACKEND`、`ENDPOINT`、`CORPUS`、样本数及各项生成预算均在脚本顶部配置。HTTP 后端必须填写 `ENDPOINT`；本地语料后端必须填写 `CORPUS`。评测参数直接取自测试脚本，无需修改训练配置中的 `evaluation` 块。
+`SPLIT="train"` 可选训练集检查拟合，`validation` / `test` 分别选择验证 / 测试集；DATA 非空时覆盖自动路径。多卡设置 `CUDA_VISIBLE_DEVICES="0,1"` 和 `NUM_WORKERS=2`，每卡一个完整模型副本并行处理不同题目。Python 环境、GPU、`BACKEND`、`ENDPOINT`、`CORPUS`、样本数及各项生成预算均在脚本顶部配置。HTTP 后端必须填写 `ENDPOINT`；本地语料后端必须填写 `CORPUS`。评测参数直接取自测试脚本，无需修改训练配置中的 `evaluation` 块。
 
 将 `DRY_RUN=1` 可先检查配置并打印实际命令，不加载模型或创建输出。每次正式运行使用新的时间戳保存预测 JSONL、指标 JSON 和日志，默认写入 `RUN_DIR/evaluation/`；单独指定模型时写入 `outputs/results/openseeker/`，可用 `OUTPUT_DIR` 修改。相对路径以项目根目录为准，支持从其他工作目录调用。此脚本执行模型评测；代码单元测试仍使用上方的 pytest 入口。
 
@@ -160,7 +162,7 @@ Content-Type: application/json
   --output outputs/results/my_run/predictions.jsonl
 ```
 
-记录每题预测、完整交互、工具参数、状态、耗时和 token 数，另存汇总。EM 是忽略大小写与多余空格的严格文本匹配，支持中文但不识别语义等价答案；不是论文使用的模型裁判指标。超预算或调用错误不会被当作成功答案。保留完整工具结果且超过预算即停止，不在推理端引入训练端没有的截断策略。GPU 在线结果须实际运行后才能报告。
+记录每题预测、完整交互、工具参数、状态、耗时和 token 数，另存汇总。EM 是忽略大小写与多余空格的严格文本匹配，支持中文但不识别语义等价答案；不是论文使用的模型裁判指标。另输出答案 token F1（英文 SQuAD 风格归一化，按空白分词），总 F1 按所有题目平均，失败/空答案记 0；中文不额外分词。超预算或调用错误不会被当作成功答案。保留完整工具结果且超过预算即停止，不在推理端引入训练端没有的截断策略。GPU 在线结果须实际运行后才能报告。
 
 ## 5. 原有检索任务
 
