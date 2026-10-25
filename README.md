@@ -35,6 +35,10 @@ bash scripts/openseeker.sh plan
 # 后续由实验人员执行；RUN_DIR 使用 plan 输出的路径。
 bash scripts/openseeker.sh train --run-dir "$RUN_DIR"
 bash scripts/openseeker.sh eval --run-dir "$RUN_DIR"
+
+# 一键训练 / 测试：先编辑各脚本顶部参数；测试时填写 RUN_DIR 或 MODEL_PATH。
+# bash scripts/train_openseeker.sh
+# bash scripts/test_openseeker.sh
 ```
 
 评测默认是严格动作匹配的离线 replay 诊断；真实在线评测应配置 HTTP 工具服务。两者结果明确区分，不将 replay 分数标为在线搜索能力。默认 16k、LoRA、batch=1 是 80GB 卡上的保守起点；未在 80GB GPU 上实测显存或吞吐。

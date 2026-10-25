@@ -121,6 +121,20 @@ OMP_NUM_THREADS=2 "$PYTHON" -m pytest tests -q
 bash scripts/openseeker.sh eval --run-dir "$RUN_DIR"
 ```
 
+### 一键测试（在脚本中修改参数）
+
+编辑 `scripts/test_openseeker.sh` 顶部的变量，然后执行：
+
+```bash
+bash scripts/test_openseeker.sh
+```
+
+填写 `RUN_DIR="outputs/experiments/<训练实验名>"` 后，脚本自动从该实验的 `train_summary.json` 读取最终模型，从 `experiment.json` 读取模型类型和测试集。也可以单独填写 `MODEL_PATH` 测试已有的合并 checkpoint；`KIND`、`DATA` 支持覆盖自动读取的值，无实验目录时默认使用 Beacon 和 `polar_correct_qwen35_16k/test.jsonl`。
+
+Python 环境、GPU、`BACKEND`、`ENDPOINT`、`CORPUS`、样本数及各项生成预算均在脚本顶部配置。HTTP 后端必须填写 `ENDPOINT`；本地语料后端必须填写 `CORPUS`。评测参数直接取自测试脚本，无需修改训练配置中的 `evaluation` 块。
+
+将 `DRY_RUN=1` 可先检查配置并打印实际命令，不加载模型或创建输出。每次正式运行使用新的时间戳保存预测 JSONL、指标 JSON 和日志，默认写入 `RUN_DIR/evaluation/`；单独指定模型时写入 `outputs/results/openseeker/`，可用 `OUTPUT_DIR` 修改。相对路径以项目根目录为准，支持从其他工作目录调用。此脚本执行模型评测；代码单元测试仍使用上方的 pytest 入口。
+
 默认 replay 后端只在模型生成的**整批工具名与完整参数**和记录一致时返回下一批历史观察，失配立即记 `tool_error/replay_miss`。不会拿原轨迹的下一条回复冒充任意新查询的结果；它只能测动作复现与协议执行，不能代表真实联网能力。
 
 在线评测使用 `backend: http` 和 `endpoint`。工具服务接口：
