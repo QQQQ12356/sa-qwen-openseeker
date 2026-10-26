@@ -9,6 +9,7 @@
 - [OpenSeeker 历史证据建库](docs/openseeker_corpus.md)：一键抽取 visit 证据、合并去重、溯源及 corpus 评测。
 - [数据分析](docs/openseeker_analysis.md)：全量结构、质量标签、工具、token 分布、筛选偏差及来源限制。
 - [实现说明](docs/openseeker_implementation.md)：协议、压缩区域、训练推理一致性、代码改动边界。
+- [离线轨迹 HTML 报告](docs/predictions_html.md)：统一转换评测 JSONL，浏览问题、答案、轨迹和指标。
 - [原项目文档](docs/README.md)：原有 Search-R1 和压缩算法说明。
 
 ## 已生成的数据
