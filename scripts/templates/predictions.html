@@ -40,9 +40,9 @@ function segment(parent,label,value,kind=''){const n=el('div',`segment ${kind}`)
 function contentBlocks(parent,value){
  if(typeof value!=='string'){segment(parent,'内容',value);return}
  // Only known protocol tags are interpreted; all content is rendered as text.
- const pattern=/<(think|thinking|tool_call|tool_calls_begin|search|visit|tool_response|information|answer)>([\s\S]*?)(?:<\/\1>|<\/tool_calls_end>)/g;
+ const pattern=/<(think|thinking|tool_call|tool_calls_begin|search|visit|tool_response|information|answer|final_answer)>([\s\S]*?)(?:<\/\1>|<\/tool_calls_end>)/g;
  let end=0,match;
- while((match=pattern.exec(value))!==null){if(match.index>end&&value.slice(end,match.index).trim())segment(parent,'内容',value.slice(end,match.index));const tag=match[1];const kind=['think','thinking'].includes(tag)?'think':tag==='answer'?'answer':['tool_response','information'].includes(tag)?'':'call';const label={think:'思考',thinking:'思考',answer:'最终答案',tool_response:'工具返回',information:'检索信息',tool_call:'工具调用',tool_calls_begin:'工具调用',search:'搜索',visit:'访问网页'}[tag];segment(parent,label,match[2],kind);end=pattern.lastIndex}
+ while((match=pattern.exec(value))!==null){if(match.index>end&&value.slice(end,match.index).trim())segment(parent,'内容',value.slice(end,match.index));const tag=match[1];const kind=['think','thinking'].includes(tag)?'think':['answer','final_answer'].includes(tag)?'answer':['tool_response','information'].includes(tag)?'':'call';const label={think:'思考',thinking:'思考',answer:'原始回答',final_answer:'最终精简答案',tool_response:'工具返回',information:'检索信息',tool_call:'工具调用',tool_calls_begin:'工具调用',search:'搜索',visit:'访问网页'}[tag];segment(parent,label,match[2],kind);end=pattern.lastIndex}
  if(value.slice(end).trim()||end===0)segment(parent,'内容',value.slice(end));
 }
 function show(index){

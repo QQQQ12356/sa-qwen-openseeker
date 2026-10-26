@@ -46,9 +46,11 @@ def select_distillation_positions(labels, regions, tokens=8, strategy="prefix",
             early = think[:min(tokens, (think.numel() + 1) // 2)]
             uniform = think[torch.linspace(0, think.numel() - 1, min(max(2, (tokens + 3) // 4 + 1), think.numel()),
                                           device=think.device).long()] if think.numel() else think
-            queues = [early.tolist(), uniform.tolist(),
+            queues = [rows[kinds == SEGMENT_IDS['final_answer_content']].tolist(),
+                      early.tolist(), uniform.tolist(),
                       rows[kinds == SEGMENT_IDS["search_content"]].tolist(),
-                      rows[kinds == SEGMENT_IDS["answer_content"]].tolist()]
+                      rows[kinds == SEGMENT_IDS["answer_content"]].tolist(),
+                      rows[kinds == SEGMENT_IDS['tool_call_content']].tolist()]
             chosen = set()
             while len(chosen) < tokens and any(queues):
                 for queue in queues:

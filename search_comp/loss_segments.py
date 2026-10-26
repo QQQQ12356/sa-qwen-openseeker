@@ -14,6 +14,8 @@ Search-R1 / 交互式轨迹里一条 assistant 输出被拆成若干片段，各
 ``search_content``标签之间的检索 query
 ``answer_tag``    ``<answer>`` / ``</answer>`` 标签本身
 ``answer_content``标签之间的最终答案
+``final_answer_tag / final_answer_content``  精简答案标签与正文
+``tool_call_tag / tool_call_content``  工具调用标签与 JSON 正文
 ``other``         其余被监督的 assistant token（标点、换行等）
 ===============  ==========================================================
 
@@ -29,6 +31,7 @@ Search-R1 / 交互式轨迹里一条 assistant 输出被拆成若干片段，各
 from __future__ import annotations
 
 import re
+import math
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -43,6 +46,11 @@ SEGMENT_NAMES: tuple = (
     "answer_tag",
     "answer_content",
     "other",
+    # Append new IDs so existing checkpoint/category IDs remain stable.
+    "final_answer_tag",
+    "final_answer_content",
+    "tool_call_tag",
+    "tool_call_content",
 )
 
 #: 不属于任何被监督类别的占位 id（未监督 token / beacon / 提示词）。
@@ -51,11 +59,13 @@ SEGMENT_IGNORE: int = -1
 #: 类别名 -> 类别 id。
 SEGMENT_IDS: Dict[str, int] = {name: index for index, name in enumerate(SEGMENT_NAMES)}
 
-#: 匹配 `<thinking>` / `<think>` / `<search>` / `<answer>` 的开闭标签。
-_TAG_PATTERN = re.compile(r"</?(thinking|think|search|answer)>")
+#: 匹配思考、检索、答案、精简答案和工具调用的开闭标签。
+_TAG_PATTERN = re.compile(r"</?(thinking|think|search|answer|final_answer|tool_call|tool_calls_begin|tool_calls_end)>")
 
 #: 标签名 -> 类别前缀（`<think>` 与 `<thinking>` 归为同一类）。
-_TAG_KIND = {"thinking": "think", "think": "think", "search": "search", "answer": "answer"}
+_TAG_KIND = {"thinking": "think", "think": "think", "search": "search", "answer": "answer",
+             "final_answer": "final_answer", "tool_call": "tool_call",
+             "tool_calls_begin": "tool_call", "tool_calls_end": "tool_call"}
 
 
 # ======================================================================
@@ -74,8 +84,8 @@ class SegmentWeight:
     weight: float = 1.0
 
     def __post_init__(self) -> None:
-        if self.weight < 0:
-            raise ValueError(f"片段权重不能为负，收到 {self.weight}")
+        if not math.isfinite(self.weight) or self.weight < 0:
+            raise ValueError(f"片段权重必须有限且不能为负，收到 {self.weight}")
         if not self.enabled and self.weight != 0:
             # 归一化：关闭即权重 0，避免「关了但权重非零」这种自相矛盾的配置
             self.weight = 0.0
@@ -125,6 +135,10 @@ class LossSegmentConfig:
     answer_tag: SegmentWeight = field(default_factory=SegmentWeight)
     answer_content: SegmentWeight = field(default_factory=SegmentWeight)
     other: SegmentWeight = field(default_factory=SegmentWeight)
+    final_answer_tag: SegmentWeight = field(default_factory=SegmentWeight)
+    final_answer_content: SegmentWeight = field(default_factory=SegmentWeight)
+    tool_call_tag: SegmentWeight = field(default_factory=SegmentWeight)
+    tool_call_content: SegmentWeight = field(default_factory=SegmentWeight)
 
     # ------------------------------------------------------------------
     def __post_init__(self) -> None:
@@ -189,7 +203,7 @@ def segment_field_names() -> Sequence[str]:
 # ======================================================================
 # 文本 -> 类别
 # ======================================================================
-def classify_assistant_text(text: str, tokenizer) -> List[int]:
+def classify_assistant_text(text: str, tokenizer, *, expected_ids=None) -> List[int]:
     """把一段 assistant 文本的每个 token 归到一个片段类别。
 
     用 tokenizer 的 ``offset_mapping`` 把 token 对齐到字符区间，再按标签正则切分：
@@ -208,6 +222,11 @@ def classify_assistant_text(text: str, tokenizer) -> List[int]:
     encoded = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
     offsets = encoded.get("offset_mapping")
     token_count = len(encoded["input_ids"])
+    if expected_ids is not None:
+        if list(encoded['input_ids']) != list(expected_ids):
+            raise ValueError('loss segment tokenizer IDs do not match training token IDs')
+        if offsets is None or len(offsets) != token_count:
+            raise ValueError('weighted loss requires token-aligned offset_mapping')
     if offsets is None:
         return [SEGMENT_IDS["other"]] * token_count
 
@@ -227,14 +246,24 @@ def _char_labels(text: str) -> List[str]:
     """逐字符标注类别名，供 token 按起始字符查表。"""
     labels = ["other"] * len(text)
     cursor = 0
-    current = "other"
+    stack = []
     for match in _TAG_PATTERN.finditer(text):
+        current = f'{stack[-1][1]}_content' if stack else 'other'
         _fill(labels, cursor, match.start(), current)
         kind = _TAG_KIND[match.group(1)]
         _fill(labels, match.start(), match.end(), f"{kind}_tag")
-        # 开标签进入内容态，闭标签回到 other
-        current = "other" if match.group(0).startswith("</") else f"{kind}_content"
+        # Tool-call envelopes contain nested individual calls. Restore the outer
+        # category after a closing tag instead of dropping the remaining JSON.
+        key = 'tool_calls' if match.group(1) in ('tool_calls_begin', 'tool_calls_end') else kind
+        if match.group(0).startswith('</'):
+            for i in range(len(stack) - 1, -1, -1):
+                if stack[i][0] == key:
+                    del stack[i:]
+                    break
+        else:
+            stack.append((key, kind))
         cursor = match.end()
+    current = f'{stack[-1][1]}_content' if stack else 'other'
     _fill(labels, cursor, len(text), current)
     return labels
 

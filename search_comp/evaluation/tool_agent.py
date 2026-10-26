@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import re
 import urllib.request
-from ..data.openseeker import encode, parse_calls, json_text, CALL_END, RESPONSE_RE
+from ..data.openseeker import (encode, parse_calls, json_text, CALL_END, RESPONSE_RE,
+                               answer_prompt, extract_final_answer)
 
 
 class ToolError(RuntimeError):
@@ -90,7 +91,7 @@ class ModelGenerator:
         from transformers import StoppingCriteria, StoppingCriteriaList
         tokenizer = self.tokenizer
         ids = torch.tensor([encoded['input_ids']], device=next(self.model.parameters()).device)
-        stops = [CALL_END, '<|im_end|>']
+        stops = [CALL_END, '</final_answer>', '<|im_end|>']
         with torch.inference_mode():
             if self.beacon:
                 out = self.model.beacon_generate(input_ids=ids, attention_mask=torch.ones_like(ids),
@@ -116,15 +117,13 @@ class ModelGenerator:
 
 
 def final_answer(text):
-    matches = re.findall(r'<answer>(.*?)</answer>', text, re.S)
-    if matches:
-        return matches[-1].strip()
-    return re.sub(r'<think>.*?</think>', '', text, flags=re.S).strip()
+    return extract_final_answer(text)
 
 
 def run_agent(messages, tokenizer, generate, tools, max_turns=32,
               max_context=16384, max_new_tokens=8192, max_tool_tokens=8192):
-    history = [dict(m) for m in messages[:2]]
+    # Use only the prompt: gold final_answer targets in the dataset never enter inference.
+    history = answer_prompt(messages[:2])
     events = []; status = 'turn_limit'; prediction = ''; generated_tokens = 0
     for turn in range(max_turns):
         encoded = encode(history, tokenizer, generation_prompt=True)

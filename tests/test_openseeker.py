@@ -2,7 +2,9 @@
 import copy
 import json
 import pytest
-from search_comp.data.openseeker import normalize, encode, parse_calls, validate, OpenSeekerDataset
+from search_comp.data.openseeker import (normalize, encode, parse_calls, validate, OpenSeekerDataset,
+                                        VERSION, LEGACY_VERSION, FINAL_ANSWER_INSTRUCTION,
+                                        extract_final_answer)
 from search_comp.evaluation.tool_agent import Registry, ReplayTools, ToolError, run_agent
 
 
@@ -24,7 +26,11 @@ def polar():
 def test_polar_does_not_replace_system_or_tool_arguments():
     raw=polar(); saved=copy.deepcopy(raw); row=normalize(raw)
     assert raw==saved
-    assert row['messages']==raw['trajectory']
+    assert row['messages'][1:-1]==raw['trajectory'][1:-1]
+    assert row['messages'][0]['content'].startswith(raw['trajectory'][0]['content'])
+    assert row['messages'][-1]['content'].startswith(raw['trajectory'][-1]['content'])
+    assert row['messages'][-1]['content'].endswith('<final_answer>Alice</final_answer>')
+    assert FINAL_ANSWER_INSTRUCTION in row['messages'][0]['content']
     assert parse_calls(row['messages'][4]['content'])[0]['arguments']['goal']=='identity'
 
 
@@ -36,6 +42,8 @@ def test_loss_and_regions_only_observation_bodies():
     assert 'search result' not in supervised and 'page evidence' not in supervised
     assert '"goal":"identity"' in supervised and '<answer>Alice</answer>' in supervised
     assert '<|im_end|>' in supervised
+    assert '<final_answer>Alice</final_answer>' in supervised
+    assert FINAL_ANSWER_INSTRUCTION not in supervised
 
 
 def test_every_inference_prefix_matches_training_exactly():
@@ -159,7 +167,7 @@ def test_refilter_correctness_and_stable_question_splits(tmp_path):
     incorrect=copy.deepcopy(sample);incorrect.update(id='incorrect',question_id='bad',correctness='Incorrect')
     longer=copy.deepcopy(sample);longer.update(id='long',question_id='long',lengths={'mock':{'total':10000}})
     (parent/'normalized.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in [sample,sample,incorrect,longer]))
-    (parent/'manifest.json').write_text(json.dumps(dict(tokenizers={'mock':{}},arguments=dict(
+    (parent/'manifest.json').write_text(json.dumps(dict(protocol=VERSION,tokenizers={'mock':{}},arguments=dict(
         input=[],seed=42,require_correct=False,test_fraction=.02,val_fraction=.02))))
     root=Path(__file__).resolve().parents[1];out=tmp_path/'filtered'
     subprocess.run([sys.executable,str(root/'scripts/refilter_openseeker.py'),'--prepared',str(parent),
@@ -183,3 +191,99 @@ def test_corpus_backend_executes_novel_queries_and_real_visits(tmp_path):
     assert 'Alice won a peace prize.' in replies[0]['content']
     with pytest.raises(ToolError,match='not present'):
         tools.execute([dict(name='visit',arguments={'url':'https://missing','goal':'prize'})])
+
+
+def test_final_answer_upgrade_is_idempotent_and_discards_stale_lengths():
+    raw=polar()
+    raw['trajectory'][-1]['content']='<think>Done.</think><answer>Alice won the prize.</answer>'
+    row=normalize(raw)
+    assert row['protocol']==VERSION
+    assert '<answer>Alice won the prize.</answer>' in row['messages'][-1]['content']
+    assert extract_final_answer(row['messages'][-1]['content'])=='Alice'
+    assert normalize(row)==row
+    legacy=copy.deepcopy(row)
+    legacy['protocol']=LEGACY_VERSION
+    legacy['messages']=copy.deepcopy(raw['trajectory'])
+    legacy['id']='keep-original-id'
+    legacy['lengths']={'old-tokenizer':{'total':100}}
+    upgraded=normalize(legacy)
+    assert upgraded['id']=='keep-original-id'
+    assert 'lengths' not in upgraded
+    assert upgraded['messages']==row['messages']
+    assert legacy['lengths']['old-tokenizer']['total']==100
+
+
+@pytest.mark.parametrize('answer', ['', None, [], {'answer':'Alice'}])
+def test_missing_or_ambiguous_reference_rejected(answer):
+    raw=polar();raw['answer']=answer
+    with pytest.raises(ValueError,match='nonempty string reference'):
+        normalize(raw)
+
+
+@pytest.mark.parametrize('output', [
+    '<answer>Alice</answer>', 'Alice', '<final_answer>Alice',
+    '<final_answer> </final_answer>',
+    '<final_answer>Alice</final_answer><final_answer>Bob</final_answer>',
+    '<final_answer>Alice</final_answer><final_answer>',
+])
+def test_agent_does_not_score_missing_or_malformed_final_answer(output):
+    row=normalize(polar())
+    result=run_agent(row['messages'],Tokenizer(),lambda e,n:(output,True,1),Registry({}))
+    assert result['prediction']==''
+    assert result['status']=='empty_answer'
+
+
+def test_generated_final_answer_is_used_without_gold_leakage():
+    row=normalize(polar());row['answer']='secret-reference'
+    # Direct agent callers only pass system/question to generation, regardless of later messages.
+    row['messages'][-1]['content']+='<final_answer>secret-reference</final_answer>'
+    def generate(encoded,limit):
+        prompt=''.join(chr(c) for c in encoded['input_ids'])
+        assert 'secret-reference' not in prompt
+        assert 'page evidence' not in prompt
+        assert prompt.count(FINAL_ANSWER_INSTRUCTION)==1
+        return '<think>Reason.</think><answer>Long explanation.</answer><final_answer>Bob</final_answer>',True,1
+    result=run_agent(row['messages'],Tokenizer(),generate,Registry({}))
+    assert result['prediction']=='Bob'
+    assert result['status']=='completed'
+
+
+def test_old_training_data_requires_remeasurement(tmp_path):
+    row=normalize(polar());row['protocol']=LEGACY_VERSION
+    path=tmp_path/'old.jsonl';path.write_text(json.dumps(row)+'\n')
+    with pytest.raises(ValueError,match='regenerate and remeasure'):
+        OpenSeekerDataset(path,Tokenizer())[0]
+
+
+def test_prepare_remeasures_added_prompt_and_final_answer(monkeypatch):
+    from scripts import prepare_openseeker as prepare
+    monkeypatch.setattr(prepare,'TOKENIZERS',{'mock':Tokenizer()},raising=False)
+    row,facts,error=prepare.measure(('source',3,polar()))
+    assert error is None
+    encoded=encode(row['messages'],Tokenizer())
+    assert row['lengths']['mock']['total']==len(encoded['input_ids'])
+    assert row['lengths']['mock']['assistant']==sum(v!=-100 for v in encoded['labels'])
+    assert facts['calls']==2
+    assert row['protocol']==VERSION
+
+
+def test_v2_tampered_target_is_not_silently_accepted():
+    row=normalize(polar())
+    row['messages'][-1]['content']=row['messages'][-1]['content'].replace(
+        '<final_answer>Alice</final_answer>','<final_answer>Bob</final_answer>')
+    with pytest.raises(ValueError,match='equal the reference'):
+        normalize(row)
+
+
+def test_refilter_rejects_old_length_measurements_before_writing(tmp_path):
+    import subprocess,sys
+    from pathlib import Path
+    parent=tmp_path/'old';parent.mkdir()
+    (parent/'manifest.json').write_text(json.dumps({'protocol':LEGACY_VERSION}))
+    output=tmp_path/'new'
+    script=Path(__file__).resolve().parents[1]/'scripts/refilter_openseeker.py'
+    result=subprocess.run([sys.executable,str(script),'--prepared',str(parent),
+        '--output',str(output),'--max-length','16384'],capture_output=True,text=True)
+    assert result.returncode!=0
+    assert 'rerun prepare_openseeker.py' in result.stderr
+    assert not output.exists()

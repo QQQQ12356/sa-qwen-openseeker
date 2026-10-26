@@ -19,6 +19,9 @@ def main():
     p.add_argument('--require-correct', action=argparse.BooleanOptionalAction, default=True)
     args=p.parse_args()
     manifest=json.loads((args.prepared/'manifest.json').read_text())
+    from search_comp.data.openseeker import VERSION
+    if manifest.get('protocol') != VERSION:
+        p.error('old protocol/lengths: rerun prepare_openseeker.py for final_answer data first')
     options=dict(manifest['arguments'])
     options['require_correct']=args.require_correct
     # Published split membership must be retained: recover from original input paths.
@@ -52,7 +55,7 @@ def main():
                 handles[split].write(line);counts[split]+=1
     finally:
         for f in handles.values():f.close()
-    result=dict(parent=str(args.prepared.resolve()),tokenizers=manifest['tokenizers'],
+    result=dict(protocol=VERSION,parent=str(args.prepared.resolve()),tokenizers=manifest['tokenizers'],
                 arguments={**options,'max_length':args.max_length},counts=dict(counts),
                 note='Derived selection; normalized full data and length distributions remain in parent.')
     (args.output/'manifest.json').write_text(json.dumps(result,indent=2)+'\n')

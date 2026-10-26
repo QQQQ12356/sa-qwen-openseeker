@@ -1,6 +1,7 @@
 """OpenSeeker wire protocol shared by preprocessing, SFT and agent inference.
 
-Keep original Polar text; render structured OpenAI calls into the same protocol.
+Keep original Polar text and append a concise gold final_answer target;
+render structured OpenAI calls into the same protocol.
 Only observation bodies are compressible. No trajectory is silently truncated.
 """
 from __future__ import annotations
@@ -21,7 +22,56 @@ PROTOCOL = '''You may call the supplied tools. Emit one or more JSON calls as:
 </tool_calls_end>
 Tool observations arrive inside <tool_response>...</tool_response>. After reasoning,
 return the final answer without further tool calls.'''
-VERSION = 'openseeker-chatml-v1'
+LEGACY_VERSION = 'openseeker-chatml-v1'
+VERSION = 'openseeker-chatml-v2-final-answer'
+FINAL_ANSWER_RE = re.compile(r'<final_answer>(.*?)</final_answer>', re.S)
+FINAL_ANSWER_INSTRUCTION = '''# Final answer format
+Keep reasoning and explanations outside <final_answer>...</final_answer>.
+After reasoning and any tool calls, end your response with exactly one
+<final_answer>...</final_answer> block containing only the concise answer to the
+question. Do not include explanations, introductory phrases, or Markdown formatting
+inside this block. For example: <final_answer>Beijing</final_answer>.
+Do not make any further tool calls after the final answer.'''
+
+
+def answer_prompt(messages):
+    """Add the same answer instruction in preprocessing and inference, without gold."""
+    result = copy.deepcopy(messages)
+    if not result or result[0]['role'] != 'system':
+        raise ValueError('expected system message')
+    if FINAL_ANSWER_INSTRUCTION not in result[0]['content']:
+        result[0]['content'] += '\n\n' + FINAL_ANSWER_INSTRUCTION
+    return result
+
+
+def extract_final_answer(text):
+    """Require one closed, nonempty answer block; never fall back to explanation."""
+    matches = FINAL_ANSWER_RE.findall(text)
+    if (len(matches) != 1 or text.count('<final_answer>') != 1
+            or text.count('</final_answer>') != 1):
+        return ''
+    return matches[0].strip()
+
+
+def with_final_answer(row):
+    """Upgrade a trajectory without changing its original reasoning or tool actions."""
+    answer = row.get('answer')
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError('final_answer requires a nonempty string reference answer')
+    answer = answer.strip()
+    if '<final_answer' in answer or '</final_answer' in answer:
+        raise ValueError('reference answer contains reserved final_answer tags')
+    result = copy.deepcopy(row)
+    result['messages'] = answer_prompt(result['messages'])
+    final = result['messages'][-1]
+    content = FINAL_ANSWER_RE.sub('', final['content']).rstrip()
+    if '<final_answer' in content or '</final_answer' in content:
+        raise ValueError('malformed final_answer in training trajectory')
+    final['content'] = content + '\n\n<final_answer>' + answer + '</final_answer>'
+    result['protocol'] = VERSION
+    # Old measurements are invalid after adding prompt and supervised answer tokens.
+    result.pop('lengths', None)
+    return result
 
 
 def json_text(value):
@@ -62,6 +112,13 @@ def normalize(row, source='unknown', index=0):
     if row.get('protocol') == VERSION:
         validate(row)
         return row
+    if row.get('protocol') == LEGACY_VERSION:
+        validate(row)
+        result = with_final_answer(row)
+        validate(result)
+        return result
+    if row.get('protocol'):
+        raise ValueError('unsupported OpenSeeker protocol: ' + str(row['protocol']))
     messages = copy.deepcopy(row.get('trajectory', row.get('messages')))
     if isinstance(messages, str):
         messages = json.loads(messages)
@@ -134,11 +191,14 @@ def normalize(row, source='unknown', index=0):
                   source=source, source_index=index,
                   correctness=row.get('trajectory correctness'),
                   declared_tool_calls=row.get('number of tool calls', row.get('n_tool_calls')))
+    # Validate the original conversation before appending a training target.
+    validate(result, require_final_answer=False)
+    result = with_final_answer(result)
     validate(result)
     return result
 
 
-def validate(row):
+def validate(row, require_final_answer=None):
     messages = row['messages']
     if len(messages) < 3 or [m['role'] for m in messages[:2]] != ['system', 'user']:
         raise ValueError('expected system, question, assistant trajectory')
@@ -160,6 +220,16 @@ def validate(row):
             raise ValueError('unexpected role')
     if messages[-1]['role'] != 'assistant' or parse_calls(messages[-1]['content']):
         raise ValueError('incomplete final answer')
+    if require_final_answer is None:
+        require_final_answer = row.get('protocol') == VERSION
+    if require_final_answer:
+        if FINAL_ANSWER_INSTRUCTION not in messages[0]['content']:
+            raise ValueError('missing final_answer system instruction')
+        answer = row.get('answer')
+        if (not isinstance(answer, str) or not answer.strip()
+                or extract_final_answer(messages[-1]['content']) != answer.strip()
+                or not messages[-1]['content'].rstrip().endswith('</final_answer>')):
+            raise ValueError('final_answer must end the trajectory and equal the reference answer')
 
 
 def pieces(messages, generation_prompt=False):
@@ -181,16 +251,29 @@ def pieces(messages, generation_prompt=False):
         yield '<|im_start|>assistant\n', False, False
 
 
-def encode(messages, tokenizer, generation_prompt=False):
+def encode(messages, tokenizer, generation_prompt=False, loss_segments=None,
+           return_loss_segment_ids=False):
+    from ..loss_segments import (LossSegmentConfig, SEGMENT_IGNORE, SEGMENT_IDS,
+                                 classify_assistant_text)
+    loss = LossSegmentConfig.from_dict(loss_segments)
+    segmented = return_loss_segment_ids or not loss.is_default
     ids, labels, regions = [], [], []
+    segment_ids = []
     for text, supervised, compressible in pieces(messages, generation_prompt):
         tokens = tokenizer.encode(text, add_special_tokens=False)
         if compressible and tokens:
             regions.append((len(ids), len(ids) + len(tokens)))
         ids.extend(tokens)
         labels.extend(tokens if supervised else [-100] * len(tokens))
+        if segmented:
+            if not supervised:
+                segment_ids.extend([SEGMENT_IGNORE] * len(tokens))
+            elif text == '<|im_end|>\n':
+                segment_ids.extend([SEGMENT_IDS['other']] * len(tokens))
+            else:
+                segment_ids.extend(classify_assistant_text(text, tokenizer, expected_ids=tokens))
     return dict(input_ids=ids, labels=labels, regions=regions,
-                question=messages[1]['content'], loss_segment_ids=None,
+                question=messages[1]['content'], loss_segment_ids=segment_ids if segmented else None,
                 n_turns=sum(m['role'] == 'assistant' for m in messages),
                 n_searches=sum(len(parse_calls(m['content'])) for m in messages if m['role'] == 'assistant'))
 
@@ -198,11 +281,10 @@ def encode(messages, tokenizer, generation_prompt=False):
 class OpenSeekerDataset:
     """Lazy JSONL offsets avoid holding multi-GB trajectories in RAM."""
     def __init__(self, data_path, tokenizer, max_length=16384, **kwargs):
-        if kwargs.get('doc_region_split') or kwargs.get('return_loss_segment_ids'):
-            raise ValueError('OpenSeeker supports whole observations and uniform assistant loss')
-        loss = kwargs.get('loss_segments')
-        if loss is not None and not loss.is_default:
-            raise ValueError('OpenSeeker requires default loss_segments')
+        if kwargs.get('doc_region_split'):
+            raise ValueError('OpenSeeker supports whole observations only')
+        self.loss_segments = kwargs.get('loss_segments')
+        self.return_loss_segment_ids = kwargs.get('return_loss_segment_ids', False)
         self.path, self.tokenizer, self.max_length = Path(data_path), tokenizer, max_length
         self.offsets = []
         with self.path.open('rb') as f:
@@ -223,9 +305,13 @@ class OpenSeekerDataset:
         with self.path.open('rb') as f:
             f.seek(self.offsets[index])
             row = json.loads(f.readline())
+        if row.get('protocol') != VERSION:
+            raise ValueError('OpenSeeker training requires v2 final_answer data; '
+                             'run prepare_openseeker.py to regenerate and remeasure the dataset')
         row = normalize(row, index=index)
         validate(row)
-        sample = encode(row['messages'], self.tokenizer)
+        sample = encode(row['messages'], self.tokenizer, loss_segments=self.loss_segments,
+                        return_loss_segment_ids=self.return_loss_segment_ids)
         if len(sample['input_ids']) > self.max_length:
             raise ValueError(f"{row['id']}: exceeds max_length={self.max_length}; run prepare first")
         return sample

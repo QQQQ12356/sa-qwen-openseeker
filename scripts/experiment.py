@@ -12,6 +12,8 @@ import time
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from search_comp.data.openseeker import VERSION
 
 
 def digest(path):
@@ -42,6 +44,8 @@ def main():
         cfg.setdefault('beacon',{}).update(spec.get('beacon',{}))
         if spec['data_mode']=='openseeker':
             manifest=json.loads((ROOT/data/'manifest.json').read_text())
+            if manifest.get('protocol') != VERSION:
+                p.error('dataset uses an old protocol; rerun prepare_openseeker.py for final_answer data')
             if cfg['model_name_or_path'] not in manifest['tokenizers']:
                 p.error('dataset was not measured with this model tokenizer; prepare with --models first')
             if manifest['arguments']['max_length']>cfg['max_length']:

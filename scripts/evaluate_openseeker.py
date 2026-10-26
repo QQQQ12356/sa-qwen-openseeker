@@ -14,7 +14,7 @@ import time
 import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from search_comp.data.openseeker import normalize
+from search_comp.data.openseeker import normalize, VERSION
 from search_comp.evaluation.em_f1 import compute_f1
 from search_comp.evaluation.tool_agent import HTTPTools, ReplayTools, CorpusTools, ModelGenerator, run_agent
 
@@ -41,6 +41,8 @@ def selected_rows(path, limit, shard_index=0, shard_count=1):
 
 def write_summary(args, count, exact, f1, statuses, seconds):
     summary = dict(
+        protocol=VERSION,
+        prediction_source='final_answer',
         mode=args.backend,
         interpretation={"replay": "exact-action replay diagnostic",
                         "corpus": "local corpus tool rollout",

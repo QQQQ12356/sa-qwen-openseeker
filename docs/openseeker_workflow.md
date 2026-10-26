@@ -111,7 +111,7 @@ bash scripts/train_openseeker.sh
 
 脚本中的参数块是独立的实验入口配置，不读取 `configs/openseeker.yaml`；两者不需要同步修改。它仍复用 `base_configs` 指定的基础训练配置，最终生效的参数保存在实验目录的 `train.yaml`，脚本配置保存在 `source_config.yaml`。每次执行都会创建新实验，不用于断点续训。
 
-将脚本顶部 `ACTION="train"` 改为 `ACTION="plan"`，可只生成配置而不加载模型。OpenSeeker 的 `beacon.loss_segments: {}` 表示全部启用且权重为 1，避免继承基础配置中的非默认分段权重。日志和模型输出沿用上述实验目录结构。
+将脚本顶部 `ACTION="train"` 改为 `ACTION="plan"`，可只生成配置而不加载模型。OpenSeeker 支持 `beacon.loss_segments` 分段权重；默认入口提供 final_answer 加权起始值，设为 `{}` 可恢复全部启用且权重为 1。详见 [分段损失配置](openseeker_loss_segments.md)。日志和模型输出沿用上述实验目录结构。
 
 ## 4. 测试与推理
 

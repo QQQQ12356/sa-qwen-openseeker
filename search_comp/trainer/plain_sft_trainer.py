@@ -53,10 +53,12 @@ class PlainSFTDataset(Dataset):
     （Beacon 压缩区信息在此处无用）。轨迹保留完整路径、不截断。
     """
 
-    def __init__(self, data_path: str, tokenizer, max_length: int = 8192, data_mode: str = "searchr1"):
+    def __init__(self, data_path: str, tokenizer, max_length: int = 8192, data_mode: str = "searchr1",
+                 loss_segments=None):
         from ..data.factory import make_dataset
 
-        self._inner = make_dataset(data_path, tokenizer, data_mode=data_mode, max_length=max_length)
+        self._inner = make_dataset(data_path, tokenizer, data_mode=data_mode, max_length=max_length,
+                                   loss_segments=loss_segments)
         self.max_length = max_length
 
     def __len__(self) -> int:
@@ -67,6 +69,8 @@ class PlainSFTDataset(Dataset):
         return {
             "input_ids": torch.tensor(sample["input_ids"], dtype=torch.long),
             "labels": torch.tensor(sample["labels"], dtype=torch.long),
+            **({"loss_segment_ids": torch.tensor(sample['loss_segment_ids'], dtype=torch.long)}
+               if sample.get('loss_segment_ids') is not None else {}),
         }
 
 
@@ -89,6 +93,8 @@ def collate_sft_batch(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         "input_ids": input_ids,
         "attention_mask": torch.ones_like(input_ids),
         "labels": labels,
+        **({"loss_segment_ids": sample['loss_segment_ids'].unsqueeze(0)}
+           if 'loss_segment_ids' in sample else {}),
     }
 
 
@@ -139,9 +145,16 @@ def main_train(
         model = apply_lora(model, cfg)
 
     max_length = cfg.get("max_length", 8192)
-    train_ds = PlainSFTDataset(cfg["train_data_path"], tokenizer, max_length, data_mode=cfg.get("data_mode", "searchr1"))
+    from ..loss_segments import LossSegmentConfig
+    from .segmented_sft_trainer import SegmentedSFTTrainer
+    loss_segments = LossSegmentConfig.from_dict(
+        cfg.get('loss_segments', cfg.get('beacon', {}).get('loss_segments')))
+    model.config.loss_segments = loss_segments.to_dict()
+    train_ds = PlainSFTDataset(cfg["train_data_path"], tokenizer, max_length,
+                              data_mode=cfg.get("data_mode", "searchr1"), loss_segments=loss_segments)
     eval_ds = (
-        PlainSFTDataset(cfg["val_data_path"], tokenizer, max_length, data_mode=cfg.get("data_mode", "searchr1"))
+        PlainSFTDataset(cfg["val_data_path"], tokenizer, max_length,
+                        data_mode=cfg.get("data_mode", "searchr1"), loss_segments=loss_segments)
         if cfg.get("val_data_path")
         else None
     )
@@ -187,7 +200,9 @@ def main_train(
         run_name=cfg["exp_name"],
     )
 
-    trainer = Trainer(
+    trainer_class = Trainer if loss_segments.is_default else SegmentedSFTTrainer
+    trainer = trainer_class(
+        **({"loss_segments": loss_segments} if not loss_segments.is_default else {}),
         model=model,
         args=args,
         train_dataset=train_ds,
@@ -201,6 +216,7 @@ def main_train(
         {
             "data": cfg["train_data_path"],
             "use_lora": use_lora,
+            "loss_segments": loss_segments.to_dict(),
             "train_samples": len(train_ds),
             "eval_samples": len(eval_ds) if eval_ds is not None else 0,
             **parameter_stats,

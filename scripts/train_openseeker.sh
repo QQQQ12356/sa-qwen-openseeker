@@ -62,7 +62,17 @@ beacon:
   beacon_window_enabled: false
   beacon_doc_region_split: false
   beacon_question_memory_v1: false
-  loss_segments: {}                 # OpenSeeker 必须使用默认统一权重
+  # 逐 token 相对权重；{} 恢复全部为 1。以下为可调整的起始值。
+  loss_segments:
+    think_tag: 1.0
+    think_content: 1.0
+    tool_call_tag: 1.0
+    tool_call_content: 1.0
+    answer_tag: 1.0
+    answer_content: 0.2
+    final_answer_tag: 2.0
+    final_answer_content: 10.0
+    other: 1.0
   beacon_ce_loss_weight: 1.0
   beacon_continuation_loss_weight: 0.1
   beacon_information_loss: false

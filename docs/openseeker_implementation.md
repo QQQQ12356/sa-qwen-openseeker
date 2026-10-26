@@ -15,7 +15,7 @@
 
 `pieces` 和 `encode` 是训练/推理共享的唯一序列化入口。采用显式 ChatML；不调用可能随模型模板删去历史 thinking 的 `apply_chat_template`。每条 assistant 的内容及结束符参与 loss；system、问题、观察、角色头全部 mask。只有 `<tool_response>` 标签之间的正文形成半开 token 区间，标签和角色边界不压缩。工具正文中出现 `<tool_call>` 文本不会被当作模型新动作。
 
-工具调用仍进入 assistant 的 CE 和原续写/蒸馏训练路径；OpenSeeker 当前使用统一 assistant loss，不套用 Search-R1 的 search_tag 权重，也不启用其基于 Doc 编号的子文档切分。非默认 loss_segments 或 stratified distillation 配置会被显式拒绝，避免以错误分段偷偷训练。
+工具调用仍进入 assistant 的 CE 和原续写/蒸馏训练路径。OpenSeeker 现在支持 think、answer、final_answer、tool_call 的标签/正文分段权重，并支持 stratified 输出蒸馏；不将工具调用 JSON 错分成 Search-R1 的 search query，也不启用基于 Doc 编号的子文档切分。详见 [分段损失配置](openseeker_loss_segments.md)。
 
 `OpenSeekerDataset` 仅在内存保存 JSONL 字节偏移，逐条读取和编码。超出 max_length 直接报错，避免训练阶段静默切断。实际数据流程先全量筛选，训练端的判断是第二道约束。
 

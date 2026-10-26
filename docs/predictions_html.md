@@ -31,7 +31,7 @@ python scripts/render_predictions_html.py outputs/data/tmp/*predictions*.jsonl \
 | 工具事件 | `events`，独立折叠显示 |
 | 指标 | `exact_match`、`f1`、`seconds`、`generated_tokens`、`turns`、`status` |
 
-`<think>`、`<thinking>`、`<tool_call>`、`<tool_calls_begin>`、`<search>`、`<visit>`、`<tool_response>`、`<information>` 和 `<answer>` 会分块标注。轨迹按原始消息顺序展示；system 默认折叠。正文作为纯文本显示，保留换行和 Markdown/公式源文，避免模型输出中的 HTML 被执行。所有原始字段均保存在“完整原始记录”中，包括额外指标。
+`<think>`、`<thinking>`、`<tool_call>`、`<tool_calls_begin>`、`<search>`、`<visit>`、`<tool_response>`、`<information>`、`<answer>` 和 `<final_answer>` 会分块标注。轨迹按原始消息顺序展示；system 默认折叠。正文作为纯文本显示，保留换行和 Markdown/公式源文，避免模型输出中的 HTML 被执行。所有原始字段均保存在“完整原始记录”中，包括额外指标。
 
 共享模板位于 `scripts/templates/predictions.html`，可直接修改配色和布局。也可用 `--template path/to/custom.html` 指定模板；模板必须恰好包含一个 `__REPORT_DATA__` 占位符，脚本在此注入 JSON 数据（结构为 `title`、`source`、`rows`）。
 
