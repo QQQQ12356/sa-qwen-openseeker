@@ -209,7 +209,26 @@ id 使用唯一字符串；url 如提供也必须唯一。没有 url 时自动�
 
 不要将测试轨迹里的工具回复直接抽出来充当独立检索语料；那属于使用题目已知证据的受控实验，结果需要单独说明。
 
-### 5.2 可直接执行的建库示例：HotpotQA 文档
+### 5.2 OpenSeeker 历史 visit 证据建库（受控诊断）
+
+本仓库提供历史证据建库入口，适用于这里的 OpenSeeker 轨迹：
+
+```bash
+bash scripts/build_openseeker_corpus.sh
+```
+
+先编辑该脚本顶部 INPUTS 和 OUTPUT_DIR。默认读取 polar_correct_qwen35_16k 的 train/validation/test，按 URL 合并成功 visit 的 Evidence in page 正文并去重，剔除目标前言、Summary、失败和无法可靠归属的回复，不提取 assistant 答案或 answer 字段。
+
+默认生成 `outputs/data/openseeker_corpus/polar_correct_qwen35_16k_evidence/corpus.jsonl`。测试脚本可配置：
+
+```bash
+BACKEND="corpus"
+CORPUS="outputs/data/openseeker_corpus/polar_correct_qwen35_16k_evidence/corpus.jsonl"
+```
+
+这是经过历史问题/目标选择的证据集合，用于受控诊断，不是独立网页语料。来源划分、hash、提取统计、接受/跳过记录均归档。完整命令、4k 数据配置及统计解释见 [OpenSeeker 历史证据语料库](openseeker_corpus.md)。
+
+### 5.3 其他建库示例：HotpotQA 文档
 
 仓库已有 HotpotQA 建库模块，命令如下（下载数据需要网络或已有缓存）：
 
@@ -237,12 +256,12 @@ id 使用唯一字符串；url 如提供也必须唯一。没有 url 时自动�
 
 仅在该输入文件实际存在时使用。这是 Search-R1 的 <information> 格式抽取器，不能拿来解析 OpenSeeker 的 <tool_response> 轨迹。用训练文档作知识库时需报告语料来源，且不保证覆盖 Polar 问题。
 
-### 5.3 修改测试脚本
+### 5.4 修改测试脚本
 
 ```bash
 BACKEND="corpus"
 ENDPOINT=""
-CORPUS="outputs/data/hotpotqa_corpus.jsonl" # 或自建 independent_corpus.jsonl
+CORPUS="outputs/data/openseeker_corpus/polar_correct_qwen35_16k_evidence/corpus.jsonl"
 DATA="outputs/data/openseeker/polar_correct_qwen35_16k/test.jsonl"
 LIMIT=2
 ```

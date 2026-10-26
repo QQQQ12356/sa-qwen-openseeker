@@ -23,7 +23,7 @@ DATA=""                              # 留空：按 SPLIT 选择数据；非空�
 # ===== 评测参数 =====
 BACKEND="replay"                      # replay：历史动作复现诊断；http：在线工具；corpus：本地语料
 ENDPOINT=""                          # http 必填，例如 http://127.0.0.1:8080/tool
-CORPUS=""                            # corpus 必填：独立语料 JSONL 路径
+CORPUS=""                            # corpus 必填：JSONL；历史证据库见 build_openseeker_corpus.sh
 LIMIT=100                            # 最多测试的样本数
 MAX_CONTEXT=16384
 MAX_NEW_TOKENS=8192

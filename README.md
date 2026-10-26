@@ -6,6 +6,7 @@
 
 - [使用指南](docs/openseeker_workflow.md)：下载、JSONL 转换、筛选、训练、测试、归档。
 - [一键测试说明](docs/openseeker_testing.md)：EM/F1、训练集拟合诊断、多卡并行、三种后端、语料构建与结果排查。
+- [OpenSeeker 历史证据建库](docs/openseeker_corpus.md)：一键抽取 visit 证据、合并去重、溯源及 corpus 评测。
 - [数据分析](docs/openseeker_analysis.md)：全量结构、质量标签、工具、token 分布、筛选偏差及来源限制。
 - [实现说明](docs/openseeker_implementation.md)：协议、压缩区域、训练推理一致性、代码改动边界。
 - [原项目文档](docs/README.md)：原有 Search-R1 和压缩算法说明。
@@ -36,6 +37,9 @@ bash scripts/openseeker.sh plan
 # 后续由实验人员执行；RUN_DIR 使用 plan 输出的路径。
 bash scripts/openseeker.sh train --run-dir "$RUN_DIR"
 bash scripts/openseeker.sh eval --run-dir "$RUN_DIR"
+
+# 历史 visit 证据建库；先编辑脚本顶部 INPUTS 和 OUTPUT_DIR。
+# bash scripts/build_openseeker_corpus.sh
 
 # 一键训练 / 测试：先编辑各脚本顶部参数；测试时填写 RUN_DIR 或 MODEL_PATH。
 # bash scripts/train_openseeker.sh

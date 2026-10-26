@@ -170,6 +170,8 @@ Content-Type: application/json
 
 ## 可执行的离线工具环境（无需 replay 或外部 API）
 
+针对 OpenSeeker 历史轨迹，可先运行 `bash scripts/build_openseeker_corpus.sh`，按脚本顶部 INPUTS / OUTPUT_DIR 生成 visit 证据语料。默认路径为 `outputs/data/openseeker_corpus/polar_correct_qwen35_16k_evidence/corpus.jsonl`，然后在测试脚本设置 BACKEND="corpus" 和对应 CORPUS。此库来自历史问题关联证据，属于受控诊断；详见 [建库操作说明](openseeker_corpus.md)。
+
 `evaluation.backend: corpus` 配合 `evaluation.corpus: /path/to/corpus.jsonl` 可以运行真正的 search→visit 循环：search 支持模型生成的新批量查询，visit 根据 URL 读取独立语料的全文。JSONL 每行为 `{"id":"doc1","url":"https://example.org/page","title":"Title","text":"Full document"}`；兼容原项目只有 id/title/text 的语料，会为其分配 corpus:// URL。
 
 ```bash
