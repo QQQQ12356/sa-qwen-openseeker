@@ -1,0 +1,30 @@
+# First install torch from the official cu126 index; see training_environment.md.
+# Explicit local version prevents an accidental switch to another CUDA wheel.
+torch==2.7.0+cu126
+triton==3.3.0
+transformers==5.9.0
+accelerate==1.14.0
+datasets==5.0.1
+peft==0.18.0
+bitsandbytes==0.50.2
+huggingface-hub==1.31.0
+tokenizers==0.22.2
+safetensors==0.8.0
+numpy==2.4.6
+PyYAML==6.0.3
+sentencepiece==0.2.2
+protobuf==7.36.1
+pyarrow==25.0.1
+rank-bm25==0.2.2
+einops==0.8.2
+packaging>=24
+psutil>=5.9
+py-cpuinfo
+hjson
+ninja
+setuptools<81
+wheel
+
+# DeepSpeed and optional CUDA kernels are installed separately without build
+# isolation, so their builds use the torch above rather than a temporary torch.
+
