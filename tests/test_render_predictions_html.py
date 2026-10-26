@@ -42,3 +42,25 @@ def test_empty_report_and_template_validation(tmp_path):
     template.write_text('<html></html>')
     with pytest.raises(ValueError, match='exactly one'):
         renderer.render_report(source, tmp_path / 'bad-report.html', template)
+
+
+def test_client_role_boundaries_and_interactions(tmp_path):
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node.js is required for offline client execution checks')
+    source = tmp_path / 'roles.jsonl'
+    rows = [dict(id='first', answer='Alice', prediction='Alice', status='completed',
+                 exact_match=False, f1=0.1, messages=[
+        dict(role='system', content='Tools: <tool_calls_begin><tool_call>{"name":"example"}</tool_call></tool_calls_end>\nFinal format: <final_answer>Beijing</final_answer>'),
+        dict(role='user', content='Who?'),
+        dict(role='assistant', content='<think>Quoted <final_answer>example inside thought</final_answer></think>\n<tool_calls_begin><tool_call>{"name":"search","arguments":{"query":["Alice"]}}</tool_call><tool_call>{"name":"visit","arguments":{"url":"https://example.org"}}</tool_call></tool_calls_end><answer>Alice explained</answer><final_answer>Alice</final_answer>'),
+        dict(role='user', content='<tool_response>Evidence: <answer>literal webpage content</answer></tool_response>')]),
+        dict(id='second', question='Second question', status='completed', exact_match=True, f1=1.0)]
+    source.write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf-8')
+    destination = tmp_path / 'roles.html'
+    renderer.render_report(source, destination)
+    harness = Path(__file__).with_name('html_report_client_test.js')
+    result = subprocess.run([node, str(harness), str(destination)], text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr

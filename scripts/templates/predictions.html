@@ -5,65 +5,225 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>轨迹检查报告</title>
 <style>
-:root{color-scheme:light;--bg:#f3f5f8;--border:#dae1eb;--muted:#64748b;--ink:#17243a;--accent:#245fc1}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.65 system-ui,sans-serif}header{padding:24px 28px 18px;background:#fff;border-bottom:1px solid var(--border)}h1{font-size:22px;margin:0;overflow-wrap:anywhere}h2{font-size:17px;margin:0 0 12px}h3{font-size:14px;margin:0 0 8px}.muted{color:var(--muted);overflow-wrap:anywhere}.stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}.stat{background:var(--bg);padding:9px 16px;border-radius:8px}.stat strong{font-size:19px;margin-right:7px}.toolbar{display:flex;flex-wrap:wrap;gap:10px;padding:16px 28px}input,select,button{font:inherit;border:1px solid var(--border);border-radius:6px;padding:7px 10px;background:white;color:var(--ink)}input{flex:1;min-width:200px}button{cursor:pointer}button:hover{border-color:var(--accent)}main{display:grid;grid-template-columns:310px minmax(0,1fr);gap:18px;padding:0 28px 28px}aside{max-height:calc(100vh - 260px);overflow:auto;position:sticky;top:12px;align-self:start}.item{display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;white-space:normal}.item.active{border-color:var(--accent);box-shadow:inset 3px 0 var(--accent)}.preview{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:5px}.card{background:white;border:1px solid var(--border);border-radius:9px;padding:18px;margin-bottom:14px;min-width:0}.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}.tag{display:inline-block;border-radius:4px;background:#edf1f7;padding:1px 7px;font-size:12px;margin-right:5px;overflow-wrap:anywhere}.good{background:#dff5e9;color:#17683b}.bad{background:#ffe7e7;color:#a92f2f}pre,.content{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;margin:0}details{border:1px solid var(--border);border-radius:7px;margin:10px 0;background:#fff}summary{cursor:pointer;padding:10px 13px;font-weight:600;overflow-wrap:anywhere}details>.body{padding:0 13px 13px}.message{border-left:4px solid #98a7ba}.message.assistant{border-left-color:#5689df}.message.tool{border-left-color:#d2a148}.message.system{border-left-color:#af91bf}.segment{margin:8px 0;padding:12px;border-radius:6px;background:#f6f8fb}.segment.think{background:#f3effa}.segment.call{background:#fff5df}.segment.answer{background:#eaf6ee}.section-label{font-size:12px;color:var(--muted);margin-bottom:5px}.metrics{display:flex;flex-wrap:wrap;gap:9px}.metric{padding:5px 9px;background:var(--bg);border-radius:5px}.nav{display:flex;gap:8px;align-items:center;margin-bottom:12px}.empty{padding:40px;text-align:center;color:var(--muted)}@media(max-width:850px){main{grid-template-columns:1fr;padding:0 12px 12px}aside{position:static;max-height:240px}.pair{grid-template-columns:1fr}header,.toolbar{padding:16px}}
+:root{color-scheme:light;--bg:#f4f6fa;--surface:#fff;--line:#e1e7ef;--ink:#1c2c43;--muted:#718096;--accent:#315fcb;--radius:12px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}button,input,select{font:inherit}button,summary{cursor:pointer}button:disabled{cursor:default;opacity:.4}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #9fbafa;outline-offset:2px}button{color:inherit}header{background:var(--surface);border-bottom:1px solid var(--line);padding:25px max(24px,calc((100vw - 1560px)/2)) 22px}.eyebrow{color:var(--accent);font-size:11px;letter-spacing:2px;font-weight:750;margin-bottom:6px}h1{font-size:20px;line-height:1.5;font-weight:650;margin:0 0 5px;overflow-wrap:anywhere}h2{font-size:15px;margin:0 0 12px;letter-spacing:.2px}.muted{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:20px}.stat{border:1px solid var(--line);border-radius:9px;padding:10px 15px;background:linear-gradient(135deg,#fff,#f8faff)}.stat strong{display:block;font-size:22px;line-height:1.4;font-weight:650;letter-spacing:-.5px}.stat span{font-size:11px;color:var(--muted)}.workspace{max-width:1608px;margin:auto;padding:20px 24px 40px}.toolbar{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:18px}input,select,.nav button{border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);padding:8px 12px}input{flex:1;min-width:230px}select{font-size:12px}main{display:grid;grid-template-columns:290px minmax(0,1fr);gap:22px}aside{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;padding:0 3px 6px 0;scrollbar-width:thin}#count{margin-bottom:10px;padding-left:3px}#list{display:flex;flex-direction:column;gap:9px}.item{text-align:left;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#ffffffb0;width:100%;transition:background .15s,border-color .15s}.item:hover{background:white;border-color:#b9c9e9}.item.active{background:#edf3ff;border-color:#91ace4;box-shadow:inset 3px 0 var(--accent)}.item-id{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--muted);margin-bottom:6px}.preview{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.65;margin-bottom:10px}.tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:5px;margin:2px 5px 0 0;background:#eef2f7;color:#5a6b83;vertical-align:middle;overflow-wrap:anywhere}.good{background:#e1f2e9;color:#21724b}.bad{background:#fbe9e7;color:#aa4a3e}.card{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:0 2px 5px #1b385303}.nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.nav button{padding:5px 11px;font-size:12px}.nav .muted{margin-left:auto}.record-id{font-size:16px;overflow-wrap:anywhere;margin-bottom:12px}.metrics{display:flex;flex-wrap:wrap;gap:8px}.metric{font-size:11px;padding:4px 9px;background:#f4f6fa;border:1px solid #edf0f5;border-radius:6px}.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.reference{border-top:3px solid #95bba8}.prediction{border-top:3px solid #8ea9e2}.content,.prose{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.9;font-size:14px}.pair .content{font-size:13px;max-height:340px;overflow:auto;padding-right:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font:12px/1.8 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;margin:0}.trajectory-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px}.trajectory-heading h2{margin:0}.trajectory-heading .nav{margin:0}.message{border:1px solid var(--line);border-radius:9px;margin:0 0 12px;overflow:hidden}.message>summary{display:flex;align-items:center;gap:9px;list-style:none;padding:11px 14px;background:#f9fafc;font-size:12px;font-weight:600}.message>summary::-webkit-details-marker{display:none}.message>summary:before{content:'›';font-size:18px;color:#96a3b6;line-height:1;transition:transform .15s}.message[open]>summary:before{transform:rotate(90deg)}.message-count{font:11px ui-monospace,monospace;color:#8b99ac}.role{font-size:11px;background:#e8eefb;color:#315caa;border-radius:4px;padding:2px 7px}.system .role{background:#eceaf2;color:#74648c}.user .role{background:#e9eef3;color:#53687c}.tool .role{background:#fff0d9;color:#9c6e1b}.message-hint{color:#8b98aa;font-size:11px;font-weight:400;margin-left:auto}.message>.body{padding:14px;border-top:1px solid var(--line)}details>summary{overflow-wrap:anywhere}.segment{background:#f8fafc;border:1px solid #edf0f5;border-radius:8px;padding:13px 15px;margin:0 0 11px}.segment:last-child{margin-bottom:0}.section-label{font-size:10px;font-weight:700;letter-spacing:.5px;color:#7b8aa1;margin-bottom:8px}.segment.think{background:#f7f5fb;border-color:#ebe6f3}.segment.answer{background:#f4f8ff;border-color:#e1eafa}.segment.final{background:#edf8f2;border-color:#cfe9dc}.segment.final .section-label{color:#36815b}.segment.final .prose{font-size:15px;font-weight:600}.segment.call{background:#fffbf2;border-color:#f0e5ce}.segment.call .section-label{color:#a07b35}.segment.system-prompt{background:#f7f8fb}.segment.observation{background:#f7fafb;border-color:#e4ecee}.fold{border:1px solid var(--line);border-radius:8px;margin:0 0 11px;background:white;overflow:hidden}.fold>summary{padding:9px 13px;font-size:12px;font-weight:500;color:#6c7b91}.fold>.body{padding:12px 14px;border-top:1px solid var(--line)}.fold.think{background:#f9f7fc;border-color:#e9e3f2}.fold.think>summary{color:#817197}.fold.observation{background:#f7fafb}.fold .segment{margin-bottom:0}.call-title{font-family:ui-monospace,monospace;font-size:12px;font-weight:650;color:#91681e}.call-arguments{margin-top:9px;padding-top:10px;border-top:1px solid #eee3ce}.warning{color:#aa6b20}.raw{margin-top:12px}.raw>summary{font-size:11px;color:#8d99a9}.empty{padding:60px 20px;text-align:center;color:var(--muted)}footer{text-align:center;font-size:11px;color:#9aa6b6;padding:12px}.message pre,.segment pre{tab-size:2}.system-prompt pre,.fold.observation>.body pre,.fold.raw>.body pre{max-height:520px;overflow:auto}@media(min-width:1500px){main{grid-template-columns:320px minmax(0,1fr)}}@media(max-width:850px){header{padding:18px 16px}.workspace{padding:16px 12px}.stats{gap:7px;grid-template-columns:repeat(3,minmax(0,1fr))}.stat{padding:8px 10px}.stat strong{font-size:18px}main{grid-template-columns:1fr;gap:14px}aside{position:static;max-height:220px}#list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.pair{grid-template-columns:1fr;gap:0}.card{padding:15px}.toolbar{gap:7px}.toolbar input{flex-basis:100%}.message-hint{display:none}}@media(max-width:450px){#list{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
-<header><h1 id="title"></h1><div id="source" class="muted"></div><div id="stats" class="stats"></div></header>
-<div class="toolbar"><input id="query" type="search" aria-label="全文搜索" placeholder="搜索问题、答案、ID、轨迹或其他字段…"><select id="status" aria-label="状态"><option value="">全部状态</option></select><select id="em" aria-label="EM 筛选"><option value="">全部 EM</option><option value="true">EM 正确</option><option value="false">EM 错误</option><option value="missing">EM 缺失</option></select><select id="sort" aria-label="排序"><option value="original">原始顺序</option><option value="f1">F1 从低到高</option><option value="seconds">耗时从高到低</option><option value="generated_tokens">Token 从高到低</option></select></div>
+<header><div class="eyebrow">TRAJECTORY REVIEW / 轨迹检查</div><h1 id="title"></h1><div id="source" class="muted"></div><div id="stats" class="stats"></div></header>
+<div class="workspace">
+<div class="toolbar"><input id="query" type="search" aria-label="全文搜索" placeholder="搜索问题、答案、ID 或轨迹内容…"><select id="status" aria-label="状态"><option value="">全部状态</option></select><select id="em" aria-label="EM 筛选"><option value="">全部 EM</option><option value="true">EM 正确</option><option value="false">EM 错误</option><option value="missing">EM 缺失</option></select><select id="sort" aria-label="排序"><option value="original">原始顺序</option><option value="f1">F1 从低到高</option><option value="seconds">耗时从高到低</option><option value="generated_tokens">Token 从高到低</option></select></div>
 <main><aside><div id="count" class="muted"></div><div id="list"></div></aside><article id="detail"></article></main>
+</div><footer>离线轨迹报告 · 所有指标沿用原始记录</footer>
 <script id="report-data" type="application/json">__REPORT_DATA__</script>
 <script>
 'use strict';
-const report=JSON.parse(document.getElementById('report-data').textContent);
-const rows=report.rows, $=id=>document.getElementById(id);
-const text=v=>v==null?'—':typeof v==='string'?v:JSON.stringify(v,null,2);
-const el=(tag,cls,value)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(value!==undefined)n.textContent=value;return n};
-const present=v=>v!==undefined&&v!==null;
-const number=v=>present(v)&&v!==''&&typeof v!=='boolean'&&Number.isFinite(Number(v))?Number(v):null;
-const emValue=r=>r.exact_match===true||r.exact_match===1||r.exact_match==='true'? 'true':r.exact_match===false||r.exact_match===0||r.exact_match==='false'?'false':'missing';
-const messages=r=>Array.isArray(r.messages)?r.messages:[];
-const question=r=>text(r.question??r.query??messages(r).find(m=>m.role==='user')?.content??'（未找到问题）');
-const prediction=r=>r.prediction??r.predicted_answer??r.response;
-const reference=r=>r.answer??r.answers??r.reference_answer??r.ground_truth;
-const searchText=rows.map(r=>JSON.stringify(r).toLocaleLowerCase());
-let visible=[],selected=null;
-document.title=report.title;$('title').textContent=report.title;$('source').textContent=`来源：${report.source} · 离线报告 · 指标沿用原文件，不重新评分`;
-const statusValues=[...new Set(rows.map(r=>String(r.status??'（缺失）')))];
-for(const s of statusValues){const o=el('option','',s);o.value=s;$('status').append(o)}
-function stat(label,value){const n=el('div','stat');n.append(el('strong','',value),document.createTextNode(label));$('stats').append(n)}
-function mean(field,ids){const values=ids.map(i=>number(rows[i][field])).filter(v=>v!==null);return values.length?values.reduce((a,b)=>a+b,0)/values.length:null}
-function updateStats(){ $('stats').replaceChildren();stat('当前 / 总条数',`${visible.length} / ${rows.length}`);const scored=visible.filter(i=>emValue(rows[i])!=='missing');stat(`EM（${scored.length} 条）`,scored.length?`${(100*scored.filter(i=>emValue(rows[i])==='true').length/scored.length).toFixed(1)}%`:'—');for(const [field,label,scale,suffix] of [['f1','平均 F1',100,'%'],['seconds','平均耗时',1,' s'],['generated_tokens','平均生成 Token',1,'']]){const value=mean(field,visible);stat(label,value===null?'—':(value*scale).toFixed(2)+suffix)}}
-function card(title,value){const n=el('section','card');n.append(el('h2','',title),el('div','content',text(value)));return n}
-function disclosure(title,body,open=false,cls=''){const d=el('details',cls);d.open=open;d.append(el('summary','',title));const b=el('div','body');b.append(body);d.append(b);return d}
-function segment(parent,label,value,kind=''){const n=el('div',`segment ${kind}`);n.append(el('div','section-label',label),el('pre','',text(value)));parent.append(n)}
-function contentBlocks(parent,value){
- if(typeof value!=='string'){segment(parent,'内容',value);return}
- // Only known protocol tags are interpreted; all content is rendered as text.
- const pattern=/<(think|thinking|tool_call|tool_calls_begin|search|visit|tool_response|information|answer|final_answer)>([\s\S]*?)(?:<\/\1>|<\/tool_calls_end>)/g;
- let end=0,match;
- while((match=pattern.exec(value))!==null){if(match.index>end&&value.slice(end,match.index).trim())segment(parent,'内容',value.slice(end,match.index));const tag=match[1];const kind=['think','thinking'].includes(tag)?'think':['answer','final_answer'].includes(tag)?'answer':['tool_response','information'].includes(tag)?'':'call';const label={think:'思考',thinking:'思考',answer:'原始回答',final_answer:'最终精简答案',tool_response:'工具返回',information:'检索信息',tool_call:'工具调用',tool_calls_begin:'工具调用',search:'搜索',visit:'访问网页'}[tag];segment(parent,label,match[2],kind);end=pattern.lastIndex}
- if(value.slice(end).trim()||end===0)segment(parent,'内容',value.slice(end));
+const report = JSON.parse(document.getElementById('report-data').textContent);
+const rows = report.rows, $ = id => document.getElementById(id);
+const text = v => v == null ? '—' : typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+const el = (tag, cls, value) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (value !== undefined) n.textContent = value;
+  return n;
+};
+const present = v => v !== undefined && v !== null;
+const number = v => present(v) && v !== '' && typeof v !== 'boolean' && Number.isFinite(Number(v)) ? Number(v) : null;
+const emValue = r => r.exact_match === true || r.exact_match === 1 || r.exact_match === 'true' ? 'true' : r.exact_match === false || r.exact_match === 0 || r.exact_match === 'false' ? 'false' : 'missing';
+const messages = r => Array.isArray(r.messages) ? r.messages : [];
+const question = r => text(r.question ?? r.query ?? messages(r).find(m => m && m.role === 'user')?.content ?? '（未找到问题）');
+const prediction = r => r.prediction ?? r.predicted_answer ?? r.response;
+const reference = r => r.answer ?? r.answers ?? r.reference_answer ?? r.ground_truth;
+const searchText = rows.map(r => JSON.stringify(r).toLocaleLowerCase());
+let visible = [], selected = null;
+document.title = report.title;
+$('title').textContent = report.title;
+$('source').textContent = `来源：${report.source}`;
+for (const s of [...new Set(rows.map(r => String(r.status ?? '（缺失）')))]) {
+  const o = el('option', '', s); o.value = s; $('status').append(o);
 }
-function show(index){
- selected=index;for(const b of $('list').children)b.classList.toggle('active',Number(b.dataset.index)===index);
- const r=rows[index],root=$('detail');root.replaceChildren();const pos=visible.indexOf(index);
- const nav=el('div','nav');for(const [label,offset] of [['← 上一条',-1],['下一条 →',1]]){const b=el('button','',label);b.disabled=pos+offset<0||pos+offset>=visible.length;b.onclick=()=>show(visible[pos+offset]);nav.append(b)}nav.append(el('span','muted',`${pos+1} / ${visible.length}`));root.append(nav);
- const meta=el('section','card');meta.append(el('h2','',text(r.id??`记录 ${index+1}`)));const metrics=el('div','metrics');for(const [key,label] of [['sample_index','样本索引'],['status','状态'],['exact_match','EM'],['f1','F1'],['seconds','耗时 (s)'],['generated_tokens','生成 Token'],['turns','工具轮数']])metrics.append(el('span','metric',`${label}: ${text(r[key])}`));meta.append(metrics);root.append(meta,card('问题',question(r)));
- const pair=el('div','pair');pair.append(card('参考答案',reference(r)),card('模型答案',prediction(r)));root.append(pair);
- const trajectory=el('section','card');trajectory.append(el('h2','',`对话轨迹 · ${messages(r).length} 条消息`));
- if(!messages(r).length)trajectory.append(el('p','muted','没有 messages 字段；请查看工具事件或原始记录。'));
- messages(r).forEach((m,i)=>{if(!m||typeof m!=='object'){trajectory.append(disclosure(`#${i+1} 消息`,el('pre','',text(m))));return}const body=el('div');if(present(m.reasoning_content??m.reasoning))segment(body,'思考',m.reasoning_content??m.reasoning,'think');if(present(m.content))contentBlocks(body,m.content);if(present(m.tool_calls))segment(body,'结构化工具调用',m.tool_calls,'call');const extra=Object.fromEntries(Object.entries(m).filter(([k])=>!['role','content','reasoning_content','reasoning','tool_calls'].includes(k)));if(Object.keys(extra).length)body.append(disclosure('消息元数据',el('pre','',text(extra))));const role=String(m.role??'unknown');const isTool=role==='tool'||(role==='user'&&typeof m.content==='string'&&/^\s*<(tool_response|information)>/.test(m.content));trajectory.append(disclosure(`#${i+1} · ${isTool?'工具返回':role}${m.name?' · '+m.name:''}`,body,role!=='system',`message ${isTool?'tool':role}`))});root.append(trajectory);
- root.append(disclosure(`工具事件 / events · ${Array.isArray(r.events)?r.events.length:'—'}`,el('pre','',text(r.events)),false));root.append(disclosure('完整原始记录（保留全部字段）',el('pre','',text(r)),false));
- const controls=el('div','nav');for(const [label,open] of [['展开全部轨迹',true],['折叠全部轨迹',false]]){const b=el('button','',label);b.onclick=()=>trajectory.querySelectorAll('details').forEach(d=>d.open=open);controls.append(b)}trajectory.insertBefore(controls,trajectory.children[1]??null);
+function stat(label, value) {
+  const n = el('div', 'stat'); n.append(el('strong', '', value), el('span', '', label)); $('stats').append(n);
 }
-function refresh(){
- const q=$('query').value.toLocaleLowerCase(),status=$('status').value,em=$('em').value,sort=$('sort').value;
- visible=rows.map((_,i)=>i).filter(i=>(!q||searchText[i].includes(q))&&(!status||String(rows[i].status??'（缺失）')===status)&&(!em||emValue(rows[i])===em));
- if(sort!=='original')visible.sort((a,b)=>{const x=number(rows[a][sort]),y=number(rows[b][sort]);return x===null?(y===null?a-b:1):y===null?-1:(sort==='f1'?x-y:y-x)||a-b});
- updateStats();$('count').textContent=`匹配 ${visible.length} 条`;$('list').replaceChildren();for(const i of visible){const r=rows[i],b=el('button','item');b.dataset.index=i;b.append(el('span','muted',`#${i+1} · ${text(r.id??'')}`));const tags=el('div');tags.append(el('span',`tag ${emValue(r)==='true'?'good':emValue(r)==='false'?'bad':''}`,`EM ${text(r.exact_match)}`),el('span','tag',`F1 ${number(r.f1)===null?'—':Number(r.f1).toFixed(3)}`),el('span','tag',text(r.status)));b.append(tags,el('div','preview',question(r)));b.onclick=()=>show(i);$('list').append(b)}if(visible.length)show(visible.includes(selected)?selected:visible[0]);else $('detail').replaceChildren(el('div','empty','没有匹配的记录。'));
+function mean(field, ids) {
+  const values = ids.map(i => number(rows[i][field])).filter(v => v !== null);
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
-let timer;$('query').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(refresh,180)});for(const id of ['status','em','sort'])$(id).addEventListener('change',refresh);refresh();
+function updateStats() {
+  $('stats').replaceChildren();
+  stat('当前匹配 / 全部样本', `${visible.length} / ${rows.length}`);
+  const scored = visible.filter(i => emValue(rows[i]) !== 'missing');
+  stat(`Exact Match · ${scored.length} 个有效样本`, scored.length ? `${(100 * scored.filter(i => emValue(rows[i]) === 'true').length / scored.length).toFixed(1)}%` : '—');
+  for (const [field, label, scale, suffix] of [['f1', '平均 F1', 100, '%'], ['seconds', '平均耗时', 1, ' s'], ['generated_tokens', '平均生成 Token', 1, '']]) {
+    const value = mean(field, visible);
+    stat(label, value === null ? '—' : (value * scale).toFixed(2) + suffix);
+  }
+}
+function card(title, value, cls = '') {
+  const n = el('section', `card ${cls}`); n.append(el('h2', '', title), el('div', 'content', text(value))); return n;
+}
+function disclosure(title, body, open = false, cls = '') {
+  const d = el('details', cls); d.open = open;
+  d.append(el('summary', '', title));
+  const b = el('div', 'body'); b.append(body); d.append(b); return d;
+}
+function segment(parent, label, value, kind = '', code = false) {
+  const n = el('div', `segment ${kind}`);
+  n.append(el('div', 'section-label', label), el(code ? 'pre' : 'div', code ? '' : 'prose', text(value)));
+  parent.append(n); return n;
+}
+function pretty(value) {
+  if (typeof value !== 'string') return text(value);
+  try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; }
+}
+function renderCall(parent, call, index) {
+  const fn = call && typeof call === 'object' ? (call.function ?? call) : null;
+  if (!fn || typeof fn.name !== 'string') { segment(parent, `工具调用 ${index + 1}`, pretty(call), 'call', true); return; }
+  const n = el('div', 'segment call');
+  n.append(el('div', 'section-label', `TOOL CALL ${index + 1}`), el('div', 'call-title', fn.name));
+  n.append(el('pre', 'call-arguments', pretty(fn.arguments ?? {}))); parent.append(n);
+}
+function toolCallBlocks(parent, source) {
+  const pattern = /<tool_call>([\s\S]*?)<\/tool_call>/g;
+  let match, end = 0, count = 0;
+  while ((match = pattern.exec(source)) !== null) {
+    if (source.slice(end, match.index).trim()) segment(parent, '工具块中的其他内容', source.slice(end, match.index), 'call', true);
+    let call; try { call = JSON.parse(match[1]); } catch { call = match[1]; }
+    renderCall(parent, call, count++); end = pattern.lastIndex;
+  }
+  if (source.slice(end).trim() || count === 0) segment(parent, '工具调用原文', source.slice(end), 'call', true);
+}
+function foldedText(parent, label, value, kind) {
+  parent.append(disclosure(`${label} · ${text(value).length.toLocaleString()} 字符`, el('pre', '', text(value)), false, `fold ${kind}`));
+}
+function assistantBlocks(parent, value) {
+  if (typeof value !== 'string') { segment(parent, '内容', value, '', true); return; }
+  // Read whole outer blocks first. A tag mentioned inside reasoning or JSON is
+  // literal content of that block, never an independent action or final answer.
+  const opening = /<(think|thinking|tool_calls_begin|tool_call|search|visit|answer|final_answer)>/g;
+  let end = 0, match;
+  while ((match = opening.exec(value)) !== null) {
+    if (value.slice(end, match.index).trim()) segment(parent, '内容', value.slice(end, match.index));
+    const tag = match[1], close = tag === 'tool_calls_begin' ? '</tool_calls_end>' : `</${tag}>`;
+    const closeAt = value.indexOf(close, opening.lastIndex);
+    if (closeAt < 0) {
+      segment(parent, '未闭合的协议块 · 原文', value.slice(match.index), 'warning', true);
+      end = value.length; break;
+    }
+    const content = value.slice(opening.lastIndex, closeAt);
+    if (tag === 'think' || tag === 'thinking') foldedText(parent, '思考过程', content, 'think');
+    else if (tag === 'tool_calls_begin') toolCallBlocks(parent, content);
+    else if (tag === 'tool_call') {
+      let call; try { call = JSON.parse(content); } catch { call = content; }
+      renderCall(parent, call, 0);
+    } else if (tag === 'final_answer') segment(parent, 'FINAL ANSWER / 最终精简答案', content.trim(), 'final');
+    else if (tag === 'answer') segment(parent, 'ANSWER / 原始回答', content.trim(), 'answer');
+    else segment(parent, tag === 'search' ? 'SEARCH / 搜索查询' : 'VISIT / 网页访问', content, 'call', true);
+    end = closeAt + close.length; opening.lastIndex = end;
+  }
+  if (value.slice(end).trim() || end === 0) segment(parent, '内容', value.slice(end));
+}
+function toolResponse(value) {
+  if (typeof value !== 'string') return null;
+  const pattern = /<(tool_response|information)>([\s\S]*?)<\/\1>/g;
+  const parts = []; let end = 0, match;
+  while ((match = pattern.exec(value)) !== null) {
+    if (value.slice(end, match.index).trim()) return null;
+    parts.push(match[2]); end = pattern.lastIndex;
+  }
+  return parts.length && !value.slice(end).trim() ? parts : null;
+}
+function messageView(message, index) {
+  if (!message || typeof message !== 'object') return disclosure(`#${index + 1} · 消息`, el('pre', '', text(message)), false, 'message');
+  const role = String(message.role ?? 'unknown');
+  const observations = role === 'tool' || role === 'user' ? toolResponse(message.content) : null;
+  const isTool = role === 'tool' || (role === 'user' && observations !== null);
+  const kind = isTool ? 'tool' : role;
+  const body = el('div');
+  // Role is the boundary: never interpret XML examples in system or user text.
+  if (role === 'system') segment(body, 'SYSTEM PROMPT / 完整系统提示词', message.content, 'system-prompt', true);
+  else if (role === 'assistant') {
+    if (present(message.reasoning_content ?? message.reasoning)) foldedText(body, '思考过程', message.reasoning_content ?? message.reasoning, 'think');
+    if (present(message.content) && message.content !== '') assistantBlocks(body, message.content);
+    if (present(message.tool_calls)) {
+      if (Array.isArray(message.tool_calls)) message.tool_calls.forEach((call, i) => renderCall(body, call, i));
+      else segment(body, '结构化工具调用', pretty(message.tool_calls), 'call', true);
+    }
+  } else if (isTool) {
+    const parts = observations ?? [message.content];
+    parts.forEach((part, i) => foldedText(body, `工具返回${parts.length > 1 ? ' ' + (i + 1) : ''}`, part, 'observation'));
+  } else segment(body, '消息正文', message.content);
+  const extra = Object.fromEntries(Object.entries(message).filter(([k]) => !['role', 'content', 'reasoning_content', 'reasoning', 'tool_calls'].includes(k)));
+  if (Object.keys(extra).length) body.append(disclosure('消息元数据', el('pre', '', text(extra)), false, 'fold raw'));
+  if (role === 'assistant') body.append(disclosure('查看完整消息原文', el('pre', '', text(message)), false, 'fold raw'));
+  const labels = {system: '系统提示词', user: '用户问题', assistant: '模型输出', tool: '工具返回'};
+  const node = disclosure('', body, role !== 'system', `message ${kind}`);
+  const summary = node.children[0];
+  summary.append(el('span', 'message-count', String(index + 1).padStart(2, '0')), el('span', 'role', isTool ? 'TOOL' : role.toUpperCase()), el('span', '', labels[kind] ?? role));
+  const chars = typeof message.content === 'string' ? message.content.length : 0;
+  summary.append(el('span', 'message-hint', `${chars.toLocaleString()} 字符${role === 'system' ? ' · 原文展示' : ''}`));
+  return node;
+}
+function metricText(key, value) {
+  if (key === 'exact_match') return emValue({exact_match: value}) === 'true' ? '正确' : emValue({exact_match: value}) === 'false' ? '错误' : '—';
+  const n = number(value);
+  if (n !== null && key === 'f1') return n.toFixed(4);
+  if (n !== null && key === 'seconds') return n.toFixed(1);
+  if (n !== null && ['generated_tokens', 'turns', 'sample_index'].includes(key)) return n.toLocaleString();
+  return text(value);
+}
+function show(index) {
+  selected = index;
+  for (const b of $('list').children) b.classList.toggle('active', Number(b.dataset.index) === index);
+  const r = rows[index], root = $('detail'), pos = visible.indexOf(index);
+  root.replaceChildren();
+  const nav = el('div', 'nav');
+  for (const [label, offset] of [['← 上一条', -1], ['下一条 →', 1]]) {
+    const b = el('button', '', label); b.disabled = pos + offset < 0 || pos + offset >= visible.length;
+    b.onclick = () => show(visible[pos + offset]); nav.append(b);
+  }
+  nav.append(el('span', 'muted', `${pos + 1} / ${visible.length}`)); root.append(nav);
+  const meta = el('section', 'card'); meta.append(el('h2', 'record-id', text(r.id ?? `记录 ${index + 1}`)));
+  const metrics = el('div', 'metrics');
+  for (const [key, label] of [['sample_index', '样本索引'], ['status', '状态'], ['exact_match', 'EM'], ['f1', 'F1'], ['seconds', '耗时 (s)'], ['generated_tokens', '生成 Token'], ['turns', '工具轮数']]) metrics.append(el('span', 'metric', `${label}: ${metricText(key, r[key])}`));
+  meta.append(metrics); root.append(meta, card('问题', question(r)));
+  const pair = el('div', 'pair'); pair.append(card('参考答案', reference(r), 'reference'), card('模型答案', prediction(r), 'prediction')); root.append(pair);
+  const trajectory = el('section', 'card trajectory'), heading = el('div', 'trajectory-heading');
+  heading.append(el('h2', '', `对话轨迹 · ${messages(r).length} 条消息`));
+  const controls = el('div', 'nav');
+  for (const [label, open] of [['展开全部', true], ['折叠全部', false]]) {
+    const b = el('button', '', label);
+    b.onclick = () => trajectory.querySelectorAll('details').forEach(d => d.open = open); controls.append(b);
+  }
+  heading.append(controls); trajectory.append(heading);
+  if (!messages(r).length) trajectory.append(el('p', 'muted', '没有 messages 字段；请查看工具事件或原始记录。'));
+  messages(r).forEach((m, i) => trajectory.append(messageView(m, i))); root.append(trajectory);
+  root.append(disclosure(`工具事件 / events · ${Array.isArray(r.events) ? r.events.length : '—'}`, el('pre', '', text(r.events)), false, 'fold'));
+  root.append(disclosure('完整原始记录 · 保留全部字段', el('pre', '', text(r)), false, 'fold raw'));
+}
+function refresh() {
+  const q = $('query').value.toLocaleLowerCase(), status = $('status').value, em = $('em').value, sort = $('sort').value;
+  visible = rows.map((_, i) => i).filter(i => (!q || searchText[i].includes(q)) && (!status || String(rows[i].status ?? '（缺失）') === status) && (!em || emValue(rows[i]) === em));
+  if (sort !== 'original') visible.sort((a, b) => {
+    const x = number(rows[a][sort]), y = number(rows[b][sort]);
+    return x === null ? (y === null ? a - b : 1) : y === null ? -1 : (sort === 'f1' ? x - y : y - x) || a - b;
+  });
+  updateStats(); $('count').textContent = `样本列表 · ${visible.length} 条匹配`;
+  $('list').replaceChildren();
+  for (const i of visible) {
+    const r = rows[i], b = el('button', 'item'); b.dataset.index = i;
+    b.append(el('span', 'item-id', `#${i + 1} · ${text(r.id ?? '')}`), el('div', 'preview', question(r)));
+    const tags = el('div');
+    tags.append(el('span', `tag ${emValue(r) === 'true' ? 'good' : emValue(r) === 'false' ? 'bad' : ''}`, `EM ${text(r.exact_match)}`), el('span', 'tag', `F1 ${number(r.f1) === null ? '—' : Number(r.f1).toFixed(3)}`), el('span', 'tag', text(r.status)));
+    b.append(tags); b.onclick = () => show(i); $('list').append(b);
+  }
+  if (visible.length) show(visible.includes(selected) ? selected : visible[0]);
+  else $('detail').replaceChildren(el('div', 'empty', '没有匹配的记录。'));
+}
+let timer;
+$('query').addEventListener('input', () => {clearTimeout(timer); timer = setTimeout(refresh, 180);});
+for (const id of ['status', 'em', 'sort']) $(id).addEventListener('change', refresh);
+refresh();
 </script>
 </body>
 </html>

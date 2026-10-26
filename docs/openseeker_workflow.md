@@ -25,6 +25,16 @@ bash scripts/openseeker.sh download --source all --endpoint https://hf-mirror.co
 
 ## 2. 全量分析、规范化、长度与质量筛选
 
+可编辑 `scripts/prepare_openseeker.sh` 顶部的输入路径、输出目录、tokenizer、长度和划分变量，然后执行：
+
+```bash
+bash scripts/prepare_openseeker.sh
+```
+
+其中 `VAL_FRACTION=0.02`、`TEST_FRACTION=0.02` 默认对应训练 / 验证 / 测试 = 96% / 2% / 2%；训练集自动取剩余比例。若需 80% / 10% / 10%，将两个变量都改为 `0.10`。两个值必须非负且和小于 1。划分在质量、长度筛选和问题去重后进行，哈希阈值控制的是近似比例，不保证精确条数；已有 val/validation/test 输入题目优先保留原归属，因此这类输入的最终比例还会受原划分影响。`SEED` 控制可复现划分，最终条数见输出 `manifest.json` 的 `counts`。调整变量后需生成新目录，已有数据不会自动更新。
+
+也可继续使用命令行参数 `--val-fraction`、`--test-fraction`：
+
 ```bash
 # MODEL ID 是精确的 tokenizer 来源，不用字符数估算 token。
 bash scripts/openseeker.sh prepare \
@@ -32,7 +42,8 @@ bash scripts/openseeker.sh prepare \
   --input outputs/data/raw/polar/5970e581dc1548f37d846a1955cb8b651d2b657e/openseeker_v1_data.jsonl \
   --output outputs/data/openseeker/polar_correct_dual_16k \
   --models Qwen/Qwen3-4B-Thinking-2507 Qwen/Qwen3.5-4B \
-  --max-length 16384 --workers 8
+  --max-length 16384 --workers 8 \
+  --val-fraction 0.02 --test-fraction 0.02
 
 # Zephyr：两个 split 必须一起传入，保留已有 validation 题目归属。
 bash scripts/openseeker.sh prepare --source zephyr \

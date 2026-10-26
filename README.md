@@ -44,6 +44,9 @@ bash scripts/openseeker.sh eval --run-dir "$RUN_DIR"
 # 历史 visit 证据建库；先编辑脚本顶部 INPUTS 和 OUTPUT_DIR。
 # bash scripts/build_openseeker_corpus.sh
 
+# 构建数据集；先编辑输入/输出路径及 VAL_FRACTION、TEST_FRACTION（训练集取剩余比例）。
+# bash scripts/prepare_openseeker.sh
+
 # 一键训练 / 测试：先编辑各脚本顶部参数；测试时填写 RUN_DIR 或 MODEL_PATH。
 # bash scripts/train_openseeker.sh
 # bash scripts/test_openseeker.sh
