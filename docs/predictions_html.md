@@ -2,6 +2,14 @@
 
 使用 Python 3 标准库，将评测 JSONL 转成一个包含全部数据、样式和交互的 HTML 文件，无需安装依赖或连接网络。
 
+推荐直接运行 `scripts/render_predictions_html.sh`。所有参数都在脚本顶部：`INPUTS` 填一个或多个 JSONL 路径，`OUTPUT_DIR` 设置输出目录（默认 `outputs/reports`，留空则保存到输入旁边），`TITLE` 可选。相对路径以项目根目录为准，从其他工作目录运行脚本也可。保存后在编辑器运行该脚本，或执行一次：
+
+```bash
+bash scripts/render_predictions_html.sh
+```
+
+无需再填写命令行参数。脚本会调用共享 Python 转换器和 HTML 模板；下面保留直接调用 Python 的用法，供需要时使用。
+
 ```bash
 # 默认写到输入文件旁边，同名 .html
 python scripts/render_predictions_html.py \

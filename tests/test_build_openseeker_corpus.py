@@ -154,3 +154,27 @@ def test_shell_from_other_directory_and_corpus_backend(tmp_path):
     tools = CorpusTools(output / "corpus.jsonl")
     assert "https://example.org/a" in tools.search(["red flowers"])
     assert "Red flowers grow here." in tools.visit("https://example.org/a", "find flowers")
+
+
+@pytest.mark.parametrize('prepared', [False, True])
+def test_final_answer_target_never_enters_corpus_or_changes_evidence(tmp_path, prepared):
+    from search_comp.data.openseeker import normalize, VERSION
+    original=trajectory()
+    original['trajectory'][-1]['content']='<think>THINK_ONLY_SECRET</think><answer>EXPLANATION_ONLY_SECRET</answer>'
+    first=build_corpus([write_rows(tmp_path/'original.jsonl',[original])],tmp_path/'original-corpus')
+    changed=trajectory()
+    changed['trajectory'][-1]['content']=original['trajectory'][-1]['content']
+    changed['answer']='FINAL_ANSWER_ONLY_SECRET'
+    if prepared:
+        changed=normalize(changed)
+        assert changed['protocol']==VERSION
+        assert '<final_answer>FINAL_ANSWER_ONLY_SECRET</final_answer>' in changed['messages'][-1]['content']
+    build_corpus([write_rows(tmp_path/'changed.jsonl',[changed])],tmp_path/'changed-corpus')
+    a=(tmp_path/'original-corpus/corpus.jsonl').read_text()
+    b=(tmp_path/'changed-corpus/corpus.jsonl').read_text()
+    assert a==b
+    assert 'Red flowers grow here.' in b
+    for secret in ('FINAL_ANSWER_ONLY_SECRET','REFERENCE_SECRET','THINK_ONLY_SECRET',
+                   'EXPLANATION_ONLY_SECRET','<final_answer>','</final_answer>'):
+        assert secret not in b
+    assert first['independent_corpus'] is False

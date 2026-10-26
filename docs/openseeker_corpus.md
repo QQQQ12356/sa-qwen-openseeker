@@ -75,7 +75,7 @@ bash scripts/openseeker.sh corpus \
 2. 先收集同一 assistant 批次的全部调用及后续回复。仅当调用数与回复包装块数一致时按原顺序配对，防止把 search 结果错归到 visit。
 3. 仅处理 visit，且 url 必须是单个 HTTP(S) URL，或只含一个 URL 的数组。包含多个 URL 的一次 visit 因不能可靠区分正文而跳过。
 4. 识别回复中独立一行的 Evidence in page:，仅保留它之后、Summary: 之前的证据。原文为列表字符串或 Markdown 时保留其内容。
-5. 去除包含 goal 的前言及 Summary；不提取 system、用户问题、assistant 推理/最终答案或参考 answer 字段。
+5. 去除包含 goal 的前言及 Summary；不提取 system、用户问题、assistant 推理/最终答案（包括 `<answer>`、`<final_answer>`）或参考 answer 字段。预处理虽然会将标准答案追加到 assistant 消息，但建库只读取配对的 visit 工具返回；改变标准答案不会改变入库正文。
 6. 以精确 URL 合并文档，不改写 URL。同一 URL 内，以去掉首尾空白后的证据 SHA256 去重，不做语义去重；不同证据按输入顺序连接。
 7. 文档 title 暂以 URL 填充，不猜测网页标题；当前 BM25 按 text 建索引。
 
