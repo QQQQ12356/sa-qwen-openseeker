@@ -4,12 +4,14 @@ import argparse
 from collections import Counter
 from contextlib import ExitStack
 import heapq
+import itertools
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import time
+import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from search_comp.data.openseeker import normalize
@@ -57,36 +59,125 @@ def write_summary(args, count, exact, f1, statuses, seconds):
     return summary
 
 
-def evaluate(args):
-    from search_comp.models.model_loader import load_beacon_model, load_tokenizer
-    from search_comp.models.plain_qwen3 import load_sft_model
+class ProgressReporter:
+    """Flush log lines immediately and keep long loading/generation phases visible."""
+    def __init__(self, total, interval, label):
+        self.total = total
+        self.interval = interval
+        self.label = label
+        self.started = time.monotonic()
+        self.phase_started = self.started
+        self.evaluation_started = None
+        self.current = "initializing"
+        self.count = self.exact = 0
+        self.f1 = 0.0
+        self.lock = threading.Lock()
+        self.stopped = threading.Event()
 
-    tok = load_tokenizer(args.model)
-    model = (load_beacon_model if args.kind == "beacon" else load_sft_model)(args.model)
-    model.eval()
-    generate = ModelGenerator(model, tok, args.kind == "beacon")
-    shared_backend = (HTTPTools(args.endpoint) if args.backend == "http" else
-                      CorpusTools(args.corpus) if args.backend == "corpus" else None)
-    statuses = Counter()
-    exact = count = 0
-    f1 = 0.0
-    start = time.time()
-    with args.output.open("x") as out:
-        for index, row in selected_rows(args.data, args.limit, args.shard_index, args.shard_count):
-            backend = ReplayTools(row["messages"]) if args.backend == "replay" else shared_backend
-            t = time.time()
-            result = run_agent(row["messages"], tok, generate, backend, args.max_turns,
-                               args.max_context, args.max_new_tokens, args.max_tool_tokens)
-            correct, answer_f1 = score_answer(result, row["answer"])
-            result.update(id=row["id"], sample_index=index, answer=row["answer"],
-                          exact_match=correct, f1=answer_f1, seconds=time.time() - t)
-            out.write(json.dumps(result, ensure_ascii=False) + "\n")
-            out.flush()
-            statuses[result["status"]] += 1
-            exact += correct
-            f1 += answer_f1
-            count += 1
-    return write_summary(args, count, exact, f1, statuses, time.time() - start)
+    def __enter__(self):
+        self.thread = threading.Thread(target=self._heartbeat, daemon=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.stopped.set()
+        self.thread.join()
+
+    def _emit(self, detail):
+        print(f"[eval {self.label}] {detail}", flush=True)
+
+    def _heartbeat(self):
+        while not self.stopped.wait(self.interval):
+            with self.lock:
+                self._emit(f"running phase={self.current}; done={self.count}/{self.total}; "
+                           f"phase_elapsed={time.monotonic() - self.phase_started:.1f}s")
+
+    def phase(self, name):
+        with self.lock:
+            self.current = name
+            self.phase_started = time.monotonic()
+            self._emit(name)
+
+    def sample(self, index):
+        with self.lock:
+            if self.evaluation_started is None:
+                self.evaluation_started = time.monotonic()
+        self.phase(f"sample_index={index} generating")
+
+    def advance(self, status, exact, f1, seconds):
+        with self.lock:
+            self.count += 1
+            self.exact += exact
+            self.f1 += f1
+            elapsed = time.monotonic() - self.evaluation_started
+            eta = elapsed / self.count * (self.total - self.count)
+            self.current = "between samples"
+            self.phase_started = time.monotonic()
+            self._emit(f"done={self.count}/{self.total} ({100 * self.count / self.total:.1f}%) "
+                       f"status={status} sample_time={seconds:.1f}s "
+                       f"EM={self.exact / self.count:.4f} F1={self.f1 / self.count:.4f} "
+                       f"elapsed={elapsed:.1f}s ETA={eta:.1f}s")
+
+
+def sample_count(args):
+    with args.data.open() as source:
+        size = sum(1 for _ in itertools.islice(source, args.limit))
+    return len(range(args.shard_index, size, args.shard_count))
+
+
+def forward_progress(readers, buffers):
+    """Tail only our progress lines, retaining partial lines until the next poll."""
+    for index, reader in enumerate(readers):
+        buffers[index] += reader.read()
+        lines = buffers[index].split("\n")
+        buffers[index] = lines.pop()
+        for line in lines:
+            if line.startswith("[eval "):
+                print(line, flush=True)
+
+
+def evaluate(args):
+    total = sample_count(args)
+    label = f"worker={args.shard_index}" if args.shard_count > 1 else "single"
+    with ProgressReporter(total, args.progress_interval, label) as progress:
+        progress.phase(f"loading model libraries; samples={total}; split={args.data_split}")
+        from search_comp.models.model_loader import load_beacon_model, load_tokenizer
+        from search_comp.models.plain_qwen3 import load_sft_model
+
+        progress.phase(f"loading tokenizer: {args.model}")
+        tok = load_tokenizer(args.model)
+        progress.phase(f"loading model and moving to device: {args.model}")
+        model = (load_beacon_model if args.kind == "beacon" else load_sft_model)(args.model)
+        model.eval()
+        generate = ModelGenerator(model, tok, args.kind == "beacon")
+        progress.phase(f"initializing backend={args.backend}" +
+                       (f"; loading corpus and building BM25: {args.corpus}" if args.backend == "corpus" else ""))
+        shared_backend = (HTTPTools(args.endpoint) if args.backend == "http" else
+                          CorpusTools(args.corpus) if args.backend == "corpus" else None)
+        progress.phase("backend ready; starting evaluation")
+        statuses = Counter()
+        exact = count = 0
+        f1 = 0.0
+        start = time.time()
+        with args.output.open("x") as out:
+            for index, row in selected_rows(args.data, args.limit, args.shard_index, args.shard_count):
+                backend = ReplayTools(row["messages"]) if args.backend == "replay" else shared_backend
+                progress.sample(index)
+                t = time.time()
+                result = run_agent(row["messages"], tok, generate, backend, args.max_turns,
+                                   args.max_context, args.max_new_tokens, args.max_tool_tokens)
+                correct, answer_f1 = score_answer(result, row["answer"])
+                result.update(id=row["id"], sample_index=index, answer=row["answer"],
+                              exact_match=correct, f1=answer_f1, seconds=time.time() - t)
+                out.write(json.dumps(result, ensure_ascii=False) + "\n")
+                out.flush()
+                statuses[result["status"]] += 1
+                exact += correct
+                f1 += answer_f1
+                count += 1
+                progress.advance(result["status"], correct, answer_f1, result["seconds"])
+        progress.phase(f"finished; writing metrics: {args.output.with_suffix('.metrics.json')}")
+        return write_summary(args, count, exact, f1, statuses, time.time() - start)
 
 
 def worker_devices(num_workers, visible):
@@ -124,6 +215,8 @@ def evaluate_parallel(args):
     paths = []
     start = time.time()
     with ExitStack() as stack:
+        readers = []
+        buffers = []
         try:
             for rank, device in enumerate(devices):
                 path = worker_dir / f"shard_{rank}.jsonl"
@@ -134,12 +227,15 @@ def evaluate_parallel(args):
                         command.extend(["--" + key.replace("_", "-"), str(value)])
                 command.extend(["--output", str(path), "--num-workers", "1",
                                 "--shard-index", str(rank), "--shard-count", str(len(devices))])
-                env = dict(os.environ, CUDA_VISIBLE_DEVICES=device)
+                env = dict(os.environ, CUDA_VISIBLE_DEVICES=device, PYTHONUNBUFFERED='1')
                 log = stack.enter_context((worker_dir / f"worker_{rank}.log").open("x"))
                 print(f"[worker {rank}] GPU={device}; log={log.name}", flush=True)
                 processes.append(subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT))
+                readers.append(stack.enter_context(Path(log.name).open(errors='replace')))
+                buffers.append('')
             pending = list(processes)
             while pending:
+                forward_progress(readers, buffers)
                 for process in pending[:]:
                     code = process.poll()
                     if code is None:
@@ -149,12 +245,14 @@ def evaluate_parallel(args):
                     pending.remove(process)
                 if pending:
                     time.sleep(0.1)
+            forward_progress(readers, buffers)
         finally:
             for process in processes:
                 if process.poll() is None:
                     process.terminate()
             for process in processes:
                 process.wait()
+    print(f'[eval all] workers finished; merging predictions: {args.output}', flush=True)
     count, exact, f1, statuses = merge_outputs(paths, args.output)
     return write_summary(args, count, exact, f1, statuses, time.time() - start)
 
@@ -176,6 +274,8 @@ def main():
     p.add_argument("--data-split", choices=["train", "validation", "test", "custom"], default="test")
     p.add_argument("--num-workers", type=int, default=1,
                    help="one model replica per GPU; explicitly set CUDA_VISIBLE_DEVICES for multiple workers")
+    p.add_argument("--progress-interval", type=float, default=15.0,
+                   help="seconds between heartbeat messages during long phases (default: 15)")
     p.add_argument("--shard-index", type=int, default=0, help=argparse.SUPPRESS)
     p.add_argument("--shard-count", type=int, default=1, help=argparse.SUPPRESS)
     args = p.parse_args()
@@ -183,6 +283,8 @@ def main():
         p.error("--endpoint required for http")
     if args.backend == "corpus" and not args.corpus:
         p.error("--corpus required for corpus backend")
+    if not 0 < args.progress_interval < float("inf"):
+        p.error("--progress-interval must be finite and positive")
     if args.num_workers < 1 or args.limit < 1:
         p.error("--num-workers and --limit must be positive")
     if args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count:

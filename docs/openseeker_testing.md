@@ -304,6 +304,25 @@ HTTP 客户端当前逐个提交调用，单次超时 90 秒；不提供自定�
 
 ## 7. 预算、结果与排查
 
+### 终端实时进度
+
+运行命令不变：`bash scripts/test_openseeker.sh`。默认开启阶段和逐题进度，并写入对应 eval 日志：
+
+```text
+[eval single] loading model and moving to device: ...
+[eval single] initializing backend=corpus; loading corpus and building BM25: ...
+[eval single] backend ready; starting evaluation
+[eval single] sample_index=0 generating
+[eval single] done=1/100 (1.0%) status=completed sample_time=12.0s EM=0.0000 F1=0.6667 elapsed=12.0s ETA=1188.0s
+```
+
+每题开始显示原始文件行号（从 0 开始）；每题完成显示完成数/实际题数、百分比、状态、单题耗时、累计 EM/F1、评测耗时和预计剩余时间。实际题数取文件行数和 LIMIT 中的较小值。ETA 根据已完成题目的平均耗时估算，不包含模型与语料初始化时间，题目长度不同时会波动。
+
+模型加载、BM25 初始化或单题生成较久时，默认每 15 秒输出 `running phase=...; done=...; phase_elapsed=...s`。心跳表示进程仍能打印当前阶段，不保证 GPU 正在推进；不显示逐 token 文本，也不改变生成预算。修改脚本顶部 `PROGRESS_INTERVAL=15`，或直接调用 Python 时设置 `--progress-interval 15`，可调整心跳间隔（必须为有限正数）。
+
+多卡时主终端实时转发每卡的 `[eval worker=0]` 等进度，完成数和 ETA 属于该卡自己的分片；每卡完整日志仍单独保存。结束时显示合并阶段，再输出全局指标。
+
+
 | 变量 | 实际含义 |
 |---|---|
 | MAX_CONTEXT | 每轮序列化后的完整历史 + 本轮生成的 token 总上限；Beacon 同样按逻辑历史计数 |
@@ -313,6 +332,7 @@ HTTP 客户端当前逐个提交调用，单次超时 90 秒；不提供自定�
 | LIMIT | 从文件开头最多读取多少行；多卡合计的上限 |
 | SPLIT | train / validation / test，选择数据划分并标记输出 |
 | NUM_WORKERS | 并行进程数，每个进程绑定一张 GPU；默认 1 |
+| PROGRESS_INTERVAL | 阶段心跳间隔，单位秒，默认 15；逐题完成时始终打印 |
 | OUTPUT_DIR | 输出目录；留空则用 RUN_DIR/evaluation，无 RUN_DIR 时用 outputs/results/openseeker |
 
 切换 32k 时将 DATA 和 MAX_CONTEXT 一起修改；它不会自动扩大显存，也不会改变已保存模型的训练配置。显存不足可先降低 MAX_CONTEXT/MAX_NEW_TOKENS 并说明预算变化。

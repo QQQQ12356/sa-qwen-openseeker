@@ -26,7 +26,7 @@ def arguments(tmp_path, data):
         model="fake-model", data=data, output=tmp_path / "predictions.jsonl",
         kind="beacon", backend="replay", endpoint=None, corpus=None, limit=7,
         max_context=1024, max_new_tokens=64, max_tool_tokens=128, max_turns=4,
-        data_split="train", num_workers=1, shard_index=0, shard_count=1)
+        data_split="train", progress_interval=15, num_workers=1, shard_index=0, shard_count=1)
 
 
 @pytest.mark.parametrize("prediction,answer,status,em,f1", [
@@ -50,7 +50,7 @@ def test_shards_cover_same_limit_once_in_order(tmp_path):
     assert sorted(i for shard in shards for i in shard) == list(range(5))
 
 
-def test_evaluate_writes_scores_and_failed_denominator(tmp_path, monkeypatch):
+def test_evaluate_writes_scores_and_failed_denominator(tmp_path, monkeypatch, capsys):
     args = arguments(tmp_path, dataset(tmp_path, 2))
     monkeypatch.setitem(sys.modules, "search_comp.models.model_loader", SimpleNamespace(
         load_tokenizer=lambda _: object(), load_beacon_model=lambda _: SimpleNamespace(eval=lambda: None)))
@@ -65,6 +65,13 @@ def test_evaluate_writes_scores_and_failed_denominator(tmp_path, monkeypatch):
     assert summary["exact_match"] == 0
     assert summary["count"] == 2
     assert summary["data_split"] == "train"
+    output = capsys.readouterr().out
+    assert "loading model and moving to device" in output
+    assert "backend ready" in output
+    assert "done=2/2 (100.0%)" in output
+    assert "status=tool_error" in output
+    assert "F1=0.3333" in output
+    assert "ETA=" in output
 
 
 @pytest.mark.parametrize("visible", ["", "0", "0,0", "-1,0"])
@@ -167,7 +174,7 @@ def test_shell_selects_experiment_split(tmp_path, split, key):
     assert not (run / "evaluation").exists()
 
 
-def test_real_worker_processes_receive_separate_gpus_and_merge(tmp_path, monkeypatch):
+def test_real_worker_processes_receive_separate_gpus_and_merge(tmp_path, monkeypatch, capsys):
     args = arguments(tmp_path, dataset(tmp_path))
     args.num_workers = 2
     args.limit = 5
@@ -186,6 +193,7 @@ def test_real_worker_processes_receive_separate_gpus_and_merge(tmp_path, monkeyp
         "                                     int(options['--shard-index']), int(options['--shard-count'])):\n"
         "        out.write(json.dumps(dict(sample_index=index, exact_match=True, f1=1.0, status='completed')) + '\\n')\n"
         "print('worker completed')\n"
+        "print('[eval worker=' + options['--shard-index'] + '] done', flush=True)\n"
     )
     monkeypatch.setattr(evaluation, "__file__", str(helper))
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,7")
@@ -197,3 +205,50 @@ def test_real_worker_processes_receive_separate_gpus_and_merge(tmp_path, monkeyp
     assert [json.loads(line)["sample_index"] for line in args.output.read_text().splitlines()] == list(range(5))
     assert summary["count"] == 5
     assert summary["f1"] == 1.0
+    output = capsys.readouterr().out
+    assert "[eval worker=0] done" in output
+    assert "[eval worker=1] done" in output
+    assert "merging predictions" in output
+
+
+def test_sample_count_uses_actual_file_and_shard(tmp_path):
+    args = arguments(tmp_path, dataset(tmp_path, 3))
+    assert evaluation.sample_count(args) == 3
+    args.limit = 2
+    assert evaluation.sample_count(args) == 2
+    args.shard_count = 3
+    args.shard_index = 2
+    assert evaluation.sample_count(args) == 0
+
+
+def test_progress_heartbeat_during_long_phase(monkeypatch):
+    import threading
+    received = threading.Event()
+    messages = []
+    reporter = evaluation.ProgressReporter(1, 0.01, "test")
+
+    def record(message):
+        messages.append(message)
+        if message.startswith("running phase="):
+            received.set()
+
+    monkeypatch.setattr(reporter, "_emit", record)
+    with reporter:
+        reporter.phase("building BM25")
+        assert received.wait(2), "long initialization should produce a heartbeat"
+    assert any("phase=building BM25" in line and "done=0/1" in line for line in messages)
+    assert not reporter.thread.is_alive()
+
+
+def test_forward_progress_retains_partial_lines(tmp_path, capsys):
+    log = tmp_path / "worker.log"
+    log.write_text("[eval worker=0] done=1/2")
+    buffers = [""]
+    with log.open() as reader:
+        evaluation.forward_progress([reader], buffers)
+        assert capsys.readouterr().out == ""
+        with log.open("a") as out:
+            out.write("\nweights output\n[eval worker=0] done=2/2\n")
+        evaluation.forward_progress([reader], buffers)
+    assert capsys.readouterr().out.splitlines() == [
+        "[eval worker=0] done=1/2", "[eval worker=0] done=2/2"]

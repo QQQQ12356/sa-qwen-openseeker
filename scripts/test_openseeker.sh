@@ -8,6 +8,7 @@ PYTHON=""
 CONDA_ENV="search-comp-qwen3.5"
 export CUDA_VISIBLE_DEVICES="0"      # 多卡示例："0,1,2,3"
 NUM_WORKERS=1                        # 每卡一个完整模型副本；多卡并行时设为使用的 GPU 数
+PROGRESS_INTERVAL=15                # 长时间加载/生成时，每隔多少秒打印当前阶段
 DRY_RUN=0                            # 1：只检查配置并打印命令，不加载模型或创建输出
 
 # ===== 模型与数据 =====
@@ -98,6 +99,7 @@ COMMAND=(
   --model "$MODEL_PATH" --kind "$KIND" --data "$DATA"
   --output "$OUTPUT" --backend "$BACKEND"
   --data-split "$SPLIT" --num-workers "$NUM_WORKERS"
+  --progress-interval "$PROGRESS_INTERVAL"
   --limit "$LIMIT" --max-context "$MAX_CONTEXT"
   --max-new-tokens "$MAX_NEW_TOKENS" --max-tool-tokens "$MAX_TOOL_TOKENS"
   --max-turns "$MAX_TURNS"

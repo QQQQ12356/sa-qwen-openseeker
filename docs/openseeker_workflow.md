@@ -135,7 +135,7 @@ bash scripts/test_openseeker.sh
 
 `SPLIT="train"` 可选训练集检查拟合，`validation` / `test` 分别选择验证 / 测试集；DATA 非空时覆盖自动路径。多卡设置 `CUDA_VISIBLE_DEVICES="0,1"` 和 `NUM_WORKERS=2`，每卡一个完整模型副本并行处理不同题目。Python 环境、GPU、`BACKEND`、`ENDPOINT`、`CORPUS`、样本数及各项生成预算均在脚本顶部配置。HTTP 后端必须填写 `ENDPOINT`；本地语料后端必须填写 `CORPUS`。评测参数直接取自测试脚本，无需修改训练配置中的 `evaluation` 块。
 
-将 `DRY_RUN=1` 可先检查配置并打印实际命令，不加载模型或创建输出。每次正式运行使用新的时间戳保存预测 JSONL、指标 JSON 和日志，默认写入 `RUN_DIR/evaluation/`；单独指定模型时写入 `outputs/results/openseeker/`，可用 `OUTPUT_DIR` 修改。相对路径以项目根目录为准，支持从其他工作目录调用。此脚本执行模型评测；代码单元测试仍使用上方的 pytest 入口。
+将 `DRY_RUN=1` 可先检查配置并打印实际命令，不加载模型或创建输出。每次正式运行使用新的时间戳保存预测 JSONL、指标 JSON 和日志，默认写入 `RUN_DIR/evaluation/`；单独指定模型时写入 `outputs/results/openseeker/`，可用 `OUTPUT_DIR` 修改。相对路径以项目根目录为准，支持从其他工作目录调用。终端会实时显示模型/后端初始化、逐题进度、累计 EM/F1 和预计剩余时间；长时间操作默认每 15 秒打印阶段心跳，可用 PROGRESS_INTERVAL 调整。多卡进度也会转发到主终端。此脚本执行模型评测；代码单元测试仍使用上方的 pytest 入口。
 
 默认 replay 后端只在模型生成的**整批工具名与完整参数**和记录一致时返回下一批历史观察，失配立即记 `tool_error/replay_miss`。不会拿原轨迹的下一条回复冒充任意新查询的结果；它只能测动作复现与协议执行，不能代表真实联网能力。
 
