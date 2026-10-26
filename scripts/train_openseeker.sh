@@ -6,7 +6,7 @@ set -euo pipefail
 # 留空时按 common.sh 的规则选择 Python；也可填当前服务器的 Python 绝对路径。
 PYTHON=""
 CONDA_ENV="search-comp-qwen3.5"
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 ACTION="train"                       # train：生成新实验并训练；plan：只生成配置
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
@@ -36,7 +36,7 @@ base_configs:
     beacon: configs/train/beacon_qwen3_searchr1.yaml
     plain: configs/train/qwen3_plain_sft.yaml
   qwen35:
-    beacon: configs/train/beacon_qwen35_searchr1.yaml
+    beacon: configs/train/beacon_qwen35_whole_searchr1.yaml
     plain: configs/train/qwen35_plain_sft.yaml
 training:
   max_length: 16384                  # 数据需提前 prepare；不在训练时截断

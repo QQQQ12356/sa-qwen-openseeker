@@ -112,6 +112,7 @@ class BeaconDistillationTrainer(LossComponentTrainer):
 
     def __init__(self, *args, distillation_teacher=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.model_accepts_loss_kwargs = False
         self.distillation_teacher = distillation_teacher
         if self.model.beacon_config.beacon_output_distill_weight > 0:
             if distillation_teacher is None:
@@ -122,7 +123,7 @@ class BeaconDistillationTrainer(LossComponentTrainer):
             distillation_teacher.eval()
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        config = model.beacon_config
+        config = self.accelerator.unwrap_model(model).beacon_config
         if model.training and config.beacon_output_distill_weight > 0:
             inputs = dict(inputs)
             positions = select_distillation_positions(

@@ -114,6 +114,7 @@ class BeaconQwen3Attention(Qwen3_5Attention):
         self.num_key_value_heads = config.num_key_value_heads
         self.head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
+        self.config = config
         self.beacon_param = getattr(config, "beacon_param", "").split()
 
         if "q" in self.beacon_param:
@@ -243,12 +244,20 @@ class BeaconQwen3Attention(Qwen3_5Attention):
             key_states = key_states.repeat_interleave(g, dim=1)
             value_states = value_states.repeat_interleave(g, dim=1)
 
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
-        if attention_mask is not None:
-            attn_weights = attn_weights + attention_mask[:, :, :, : key_states.shape[-2]]
-        attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
-        attn_weights = F.dropout(attn_weights, p=self.attention_dropout, training=self.training)
-        attn_output = torch.matmul(attn_weights, value_states)
+        if getattr(self.config, "beacon_attention_backend", "eager") == "sdpa":
+            attn_output = F.scaled_dot_product_attention(
+                query_states, key_states, value_states,
+                attn_mask=attention_mask[:, :, :, :key_states.shape[-2]] if attention_mask is not None else None,
+                dropout_p=self.attention_dropout if self.training else 0.0,
+                scale=self.scaling,
+            )
+        else:
+            attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
+            if attention_mask is not None:
+                attn_weights = attn_weights + attention_mask[:, :, :, : key_states.shape[-2]]
+            attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+            attn_weights = F.dropout(attn_weights, p=self.attention_dropout, training=self.training)
+            attn_output = torch.matmul(attn_weights, value_states)
         attn_output = attn_output.transpose(1, 2).contiguous().view(*input_shape, -1)
         attn_output = attn_output * torch.sigmoid(gate)
         if "o" in self.beacon_param and beacon_size > 0:

@@ -53,6 +53,8 @@ def resolve_experiment_dir(config: dict[str, Any]) -> Path:
 
 def write_json(path: str | Path, payload: Any) -> None:
     """以 UTF-8、可读格式写 JSON。"""
+    if int(os.environ.get("RANK", "0")) != 0:
+        return
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
@@ -79,6 +81,8 @@ def prepare_run_artifacts(
 ) -> Path:
     """创建运行目录并保存解析后的配置、环境和命令。"""
     output = Path(run_dir)
+    if int(os.environ.get("RANK", "0")) != 0:
+        return output
     output.mkdir(parents=True, exist_ok=True)
     write_json(output / "resolved_config.json", config)
     metadata = {

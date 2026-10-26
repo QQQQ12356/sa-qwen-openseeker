@@ -21,10 +21,14 @@ class JsonlMetricsCallback(TrainerCallback):
         self.append = append
 
     def on_train_begin(self, args, state, control, **kwargs):
+        if not state.is_world_process_zero:
+            return
         if self.metrics_path.exists() and not self.append:
             self.metrics_path.unlink()
 
     def on_log(self, args, state, control, logs=None, **kwargs):
+        if not state.is_world_process_zero:
+            return
         if not logs:
             return
         record: dict[str, Any] = {
@@ -37,6 +41,8 @@ class JsonlMetricsCallback(TrainerCallback):
         append_jsonl(self.metrics_path, record)
 
     def on_train_end(self, args, state, control, **kwargs):
+        if not state.is_world_process_zero:
+            return
         write_json(
             self.run_dir / "trainer_state_summary.json",
             {

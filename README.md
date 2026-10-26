@@ -5,6 +5,7 @@
 默认模型为 `Qwen/Qwen3-4B-Thinking-2507` 和 `Qwen/Qwen3.5-4B`。实验参数集中在 [configs/openseeker.yaml](configs/openseeker.yaml)。
 
 - [使用指南](docs/openseeker_workflow.md)：下载、JSONL 转换、筛选、训练、测试、归档。
+- [多卡训练](docs/multi_gpu_training.md)：Beacon / plain 的 torchrun、DeepSpeed、CPU 卸载和显存边界。
 - [一键测试说明](docs/openseeker_testing.md)：EM/F1、训练集拟合诊断、多卡并行、三种后端、语料构建与结果排查。
 - [OpenSeeker 历史证据建库](docs/openseeker_corpus.md)：一键抽取 visit 证据、合并去重、溯源及 corpus 评测。
 - [数据分析](docs/openseeker_analysis.md)：全量结构、质量标签、工具、token 分布、筛选偏差及来源限制。

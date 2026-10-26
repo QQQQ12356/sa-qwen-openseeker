@@ -120,6 +120,8 @@ def load_text_causal_model(
     model = model.to(torch_dtype)
     if device_map == "auto":
         model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    elif device_map is not None:
+        model = model.to(device_map)
     model.eval()
     return model
 

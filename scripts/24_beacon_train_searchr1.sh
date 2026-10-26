@@ -22,7 +22,7 @@ if [[ -n ${SHADOWED_LD_PATHS:-} && -n ${LD_LIBRARY_PATH:-} ]]; then
   export LD_LIBRARY_PATH
 fi
 PYTHON_BIN=$(resolve_python)
-CONFIG=${1:-configs/train/beacon_qwen3_searchr1.yaml}
+CONFIG=${1:-configs/train/beacon_qwen35_whole_searchr1.yaml}
 if [[ $# -gt 0 ]]; then shift; fi
 # 可用环境变量覆盖（未设置则沿用 YAML）；额外 --set 参数优先级最高。
 # MODEL_NAME_OR_PATH: Qwen3 默认模型，或 Qwen/Qwen3.5-4B / 本地 checkpoint。
@@ -59,5 +59,5 @@ mkdir -p outputs/models
 echo "[beacon-searchr1] 训练数据: Search-R1 messages 轨迹（默认 outputs/data/searchr1/qwen3-4b-instruct-sft.jsonl）"
 LOG_PATH=${LOG_PATH:-$(new_log_path beacon_searchr1_train)}
 run_logged "$LOG_PATH" env CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0} \
-  "$PYTHON_BIN" -u -m search_comp.trainer.beacon_trainer --config "$CONFIG" "${BEACON_OVERRIDES[@]}" "$@"
+  "$PYTHON_BIN" -u -m search_comp.trainer.launch --module search_comp.trainer.beacon_trainer --config "$CONFIG" "${BEACON_OVERRIDES[@]}" "$@"
 echo "[beacon-searchr1] 训练完成"

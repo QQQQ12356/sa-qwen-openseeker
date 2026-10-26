@@ -60,6 +60,7 @@ beacon:
   beacon_embed_init: eos
   beacon_pos: append
   beacon_attn: full-coverage
+  beacon_attention_backend: sdpa
   beacon_linear_writer_rank: 128
   beacon_loss_chunk_size: 32
   beacon_checkpoint_loss: true

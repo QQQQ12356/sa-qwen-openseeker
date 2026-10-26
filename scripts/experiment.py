@@ -14,6 +14,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from search_comp.data.openseeker import VERSION
+from search_comp.trainer.launch import training_command
 
 
 def digest(path):
@@ -78,8 +79,8 @@ def main():
         if digest(ROOT/path)!=expected:raise RuntimeError(f'code changed since plan: {path}; create a new run')
     for key, expected in spec['data_fingerprints'].items():
         if digest(cfg[key])!=expected:raise RuntimeError(f'dataset changed: {key}')
-    train_cmd=[sys.executable,'-m','search_comp.trainer.'+('beacon_trainer' if spec['kind']=='beacon' else 'plain_sft_trainer'),
-               '--config',str(run/'train.yaml')]
+    train_cmd=training_command('search_comp.trainer.'+('beacon_trainer' if spec['kind']=='beacon' else 'plain_sft_trainer'),
+                              ['--config',str(run/'train.yaml')])
     if args.action=='plan':
         print(json.dumps(dict(run_dir=str(run),train_command=train_cmd,
               next=f'{sys.executable} scripts/experiment.py train --run-dir {run}'),indent=2));return

@@ -138,7 +138,9 @@ def main_train(
     tokenizer = load_sft_tokenizer(cfg["model_name_or_path"])
     tokenizer.pad_token = tokenizer.eos_token
 
-    model = load_sft_model(cfg["model_name_or_path"])
+    from ..utils.distributed import setup_training
+    model_device = setup_training(cfg)
+    model = load_sft_model(cfg["model_name_or_path"], device_map=model_device)
 
     use_lora = cfg.get("use_lora", False)
     if use_lora:
@@ -190,6 +192,7 @@ def main_train(
         bf16=cfg.get("use_bf16", True),
         optim="adamw_bnb_8bit" if use_8bit else cfg.get("optim", "adamw_torch"),
         gradient_checkpointing=cfg.get("gradient_checkpointing", True),
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         report_to="none",
         disable_tqdm=False,
         seed=cfg.get("seed", 42),
@@ -198,6 +201,8 @@ def main_train(
         eval_steps=cfg.get("eval_steps", cfg.get("save_freq_steps", 200)),
         per_device_eval_batch_size=cfg.get("per_device_eval_batch_size", 1),
         run_name=cfg["exp_name"],
+        deepspeed=cfg.get("deepspeed"),
+        ddp_find_unused_parameters=True,
     )
 
     trainer_class = Trainer if loss_segments.is_default else SegmentedSFTTrainer
@@ -231,6 +236,9 @@ def main_train(
     train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     trainer.save_model(ckpt_dir)
+    trainer.accelerator.wait_for_everyone()
+    if not trainer.is_world_process_zero():
+        return
     tokenizer.save_pretrained(ckpt_dir)
     summary = {
         "use_lora": use_lora,

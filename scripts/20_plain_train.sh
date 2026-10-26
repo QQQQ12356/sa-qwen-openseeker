@@ -7,7 +7,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 PYTHON_BIN=$(resolve_python)
 
-CONFIG=${1:-configs/train/qwen3_plain_sft.yaml}
+CONFIG=${1:-configs/train/qwen35_plain_sft.yaml}
 if [[ $# -gt 0 ]]; then shift; fi
 SEARCHR1_DATA=${SEARCHR1_DATA:-outputs/data/searchr1/qwen3-4b-instruct-sft.jsonl}
 
@@ -31,5 +31,5 @@ fi
 echo "[plain-sft] 开始训练（标准 Trainer，可视化到终端）"
 LOG_PATH=${LOG_PATH:-$(new_log_path plain_train)}
 run_logged "$LOG_PATH" env CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0} \
-    "$PYTHON_BIN" -u -m search_comp.trainer.plain_sft_trainer --config "$CONFIG" "$@"
+    "$PYTHON_BIN" -u -m search_comp.trainer.launch --module search_comp.trainer.plain_sft_trainer --config "$CONFIG" "$@"
 echo "[plain-sft] 训练完成"

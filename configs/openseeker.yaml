@@ -11,7 +11,7 @@ base_configs:
     beacon: configs/train/beacon_qwen3_searchr1.yaml
     plain: configs/train/qwen3_plain_sft.yaml
   qwen35:
-    beacon: configs/train/beacon_qwen35_searchr1.yaml
+    beacon: configs/train/beacon_qwen35_whole_searchr1.yaml
     plain: configs/train/qwen35_plain_sft.yaml
 training:
   max_length: 16384                  # 完整序列上限，不截断；80GB 首轮建议 16k

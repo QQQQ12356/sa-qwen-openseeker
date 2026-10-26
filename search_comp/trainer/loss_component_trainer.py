@@ -49,7 +49,8 @@ class LossComponentTrainer(Trainer):
             num_items_in_batch=num_items_in_batch,
         )
         # eval 前向（model.eval()）不污染下一个训练日志窗口。
-        parts = getattr(model, LOSS_PARTS_ATTRIBUTE, None) if model.training else None
+        unwrapped = self.accelerator.unwrap_model(model)
+        parts = getattr(unwrapped, LOSS_PARTS_ATTRIBUTE, None) if model.training else None
         if parts:
             for name, value in parts.items():
                 total = self._loss_part_totals.get(name)

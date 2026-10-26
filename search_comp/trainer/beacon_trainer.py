@@ -40,6 +40,7 @@ from ..utils.runtime import (
 )
 from ..utils.trainer_callbacks import JsonlMetricsCallback
 from .beacon_distillation_trainer import BeaconDistillationTrainer
+from ..utils.distributed import setup_training, save_beacon_checkpoint
 
 
 def _cuda_memory_snapshot() -> dict:
@@ -140,15 +141,17 @@ class _SaveBeaconCheckpoints(TrainerCallback):
         gs = state.global_step
         if gs > 0 and gs % self.save_freq == 0:
             ckpt = os.path.join(self.exp_dir, f"checkpoint-{gs}")
-            _save_training_checkpoint(self.model, self.tokenizer, ckpt, self.use_lora)
-            print(f"[beacon] 已保存 adapter/state -> {ckpt}", flush=True)
+            save_beacon_checkpoint(self.trainer, self.model, self.tokenizer, ckpt, self.use_lora)
+            if state.is_world_process_zero:
+                print(f"[beacon] 已保存 adapter/state -> {ckpt}", flush=True)
         if self.max_steps is not None and gs >= self.max_steps:
             control.should_training_stop = True  # 精确在 max_steps 处停止
 
     def on_train_end(self, args, state, control, **kwargs):
         final_dir = os.path.join(self.exp_dir, "final_adapter")
-        _save_training_checkpoint(self.model, self.tokenizer, final_dir, self.use_lora)
-        print(f"[beacon] 训练结束，adapter/state 已保存到 {final_dir}", flush=True)
+        save_beacon_checkpoint(self.trainer, self.model, self.tokenizer, final_dir, self.use_lora)
+        if state.is_world_process_zero:
+            print(f"[beacon] 训练结束，adapter/state 已保存到 {final_dir}", flush=True)
 
 
 def configure_whole_trajectory(cfg: dict) -> None:
@@ -170,6 +173,7 @@ def main_train(
 
     cfg = load_yaml_config(config_path, overrides)
     configure_whole_trajectory(cfg)
+    model_device = setup_training(cfg, beacon=True)
     shuffle_train_data = cfg.setdefault("shuffle_train_data", True)
     if not isinstance(shuffle_train_data, bool):
         raise ValueError("shuffle_train_data 必须为 bool（true 或 false）")
@@ -190,7 +194,8 @@ def main_train(
 
     beacon_cfg = BeaconConfig.from_dict(cfg.get("beacon", {}))
     print(f"[beacon] SFT 已取消长度分窗：{beacon_cfg.describe_layout()}", flush=True)
-    model = load_beacon_model(cfg["model_name_or_path"], beacon_config=beacon_cfg)
+    model = load_beacon_model(cfg["model_name_or_path"], beacon_config=beacon_cfg,
+                              device_map=model_device)
     model.train()
     if cfg.get("gradient_checkpointing", False):
         print(
@@ -289,6 +294,29 @@ def main_train(
         print(f"[beacon] 按 epoch 训练：num_epochs={cfg.get('num_epochs', 1)} "
               f"(steps/epoch≈{len(train_ds)//grad_accum})", flush=True)
 
+    teacher = None
+    if beacon_cfg.beacon_output_distill_weight > 0:
+        from ..milestones.qwen35_text import load_text_causal_model
+
+        teacher_path = cfg.get("distill_teacher_model_name_or_path") or cfg["model_name_or_path"]
+        if not teacher_path:
+            raise ValueError("输出蒸馏需要配置 distill_teacher_model_name_or_path")
+        teacher_device = cfg.get("distill_teacher_device", "auto")
+        if teacher_device == "auto" and (cfg.get("deepspeed") or int(os.environ.get("WORLD_SIZE", "1")) > 1):
+            teacher_device = "cpu"
+        if teacher_device not in {"auto", "cpu"}:
+            raise ValueError("distill_teacher_device 必须为 auto 或 cpu")
+        # 两者须有相同 token ID 语义；仅检查 vocab_size 无法发现等长的错位词表。
+        teacher_tokenizer = load_text_tokenizer(teacher_path)
+        if teacher_tokenizer.get_vocab() != tokenizer.get_vocab():
+            raise ValueError("蒸馏 teacher 与 student 的 tokenizer 词表不一致")
+        teacher = load_text_causal_model(
+            teacher_path,
+            torch_dtype=next(model.parameters()).dtype,
+            device_map=teacher_device,
+        )
+        print(f"[beacon] 冻结原生输出蒸馏 teacher: {teacher_path}", flush=True)
+
     args = TrainingArguments(
         output_dir=exp_dir,
         per_device_train_batch_size=1,          # collator 强制 bs=1，通过grad_accum 扩大有效 batch
@@ -321,28 +349,9 @@ def main_train(
         per_device_eval_batch_size=1,
         prediction_loss_only=True,
         run_name=cfg["exp_name"],
+        deepspeed=cfg.get("deepspeed"),
+        ddp_find_unused_parameters=True,
     )
-
-    teacher = None
-    if beacon_cfg.beacon_output_distill_weight > 0:
-        from ..milestones.qwen35_text import load_text_causal_model
-
-        teacher_path = cfg.get("distill_teacher_model_name_or_path") or cfg["model_name_or_path"]
-        if not teacher_path:
-            raise ValueError("输出蒸馏需要配置 distill_teacher_model_name_or_path")
-        teacher_device = cfg.get("distill_teacher_device", "auto")
-        if teacher_device not in {"auto", "cpu"}:
-            raise ValueError("distill_teacher_device 必须为 auto 或 cpu")
-        # 两者须有相同 token ID 语义；仅检查 vocab_size 无法发现等长的错位词表。
-        teacher_tokenizer = load_text_tokenizer(teacher_path)
-        if teacher_tokenizer.get_vocab() != tokenizer.get_vocab():
-            raise ValueError("蒸馏 teacher 与 student 的 tokenizer 词表不一致")
-        teacher = load_text_causal_model(
-            teacher_path,
-            torch_dtype=next(model.parameters()).dtype,
-            device_map=teacher_device,
-        )
-        print(f"[beacon] 冻结原生输出蒸馏 teacher: {teacher_path}", flush=True)
 
     trainer = BeaconDistillationTrainer(
         model=model,
@@ -358,6 +367,9 @@ def main_train(
             JsonlMetricsCallback(exp_dir),
         ],
     )
+    for callback in trainer.callback_handler.callbacks:
+        if isinstance(callback, _SaveBeaconCheckpoints):
+            callback.trainer = trainer
 
     t0 = time.time()
     length_summary = _sample_length_summary(
@@ -402,12 +414,15 @@ def main_train(
 
     final_adapter_dir = os.path.join(exp_dir, "final_adapter")
     final_dir = os.path.join(exp_dir, "final")
+    if not use_lora:
+        save_beacon_checkpoint(trainer, model, tokenizer, final_dir, use_lora=False)
+    trainer.accelerator.wait_for_everyone()
+    if not trainer.is_world_process_zero():
+        return
     if use_lora:
         _merge_final_adapter_in_subprocess(
             cfg["model_name_or_path"], final_adapter_dir, final_dir, cfg.get("beacon", {})
         )
-    else:
-        _save_training_checkpoint(model, tokenizer, final_dir, use_lora=False)
     write_json(
         os.path.join(exp_dir, "train_summary.json"),
         {
@@ -420,22 +435,6 @@ def main_train(
     )
     print(f"[beacon] 训练完成，训练步数={trainer.state.global_step}，耗时 {time.time()-t0:.1f}s，"
           f"模型保存到 {final_dir}")
-
-
-def _save_training_checkpoint(model, tokenizer, save_dir: str, use_lora: bool) -> None:
-    """保存可恢复的 LoRA adapter 与 Beacon 参数 state dict。"""
-    os.makedirs(save_dir, exist_ok=True)
-    if use_lora:
-        model.save_pretrained(save_dir)
-        beacon_state = {
-            name.removeprefix("base_model.model."): param.detach().cpu()
-            for name, param in model.named_parameters()
-            if "beacon" in name
-        }
-        torch.save(beacon_state, os.path.join(save_dir, "beacon_state.pt"))
-    else:
-        model.save_pretrained(save_dir)
-    tokenizer.save_pretrained(save_dir)
 
 
 def _merge_final_adapter_in_subprocess(

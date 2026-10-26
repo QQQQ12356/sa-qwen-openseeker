@@ -38,6 +38,8 @@ class BeaconConfig:
     beacon_ratio: int = 64
     #: beacon 的注意力模式。full-coverage 因果地覆盖当前 chunk 中此前的 token
     beacon_attn: str = "full-coverage"
+    #: full-attention 算子；sdpa 避免显式保存按头展开的注意力矩阵。
+    beacon_attention_backend: str = "eager"
     #: 为 beacon 引入哪些独立投影矩阵，取值 "q"/"k"/"v"/"o" 的任意组合（空格分隔）
     beacon_param: str = "q k v"
     #: beacon 嵌入向量的初始化来源："eos" / "bos"
@@ -205,6 +207,7 @@ class BeaconConfig:
                 self.beacon_pos in {"append", "intersect"}
             ), f"beacon_pos 必须为 append 或 intersect，收到 {self.beacon_pos}"
             valid_params = {"q", "k", "v", "o"}
+            assert self.beacon_attention_backend in {"eager", "sdpa"}
             for p in self.beacon_param.split():
                 assert p in valid_params, f"beacon_param 含非法投影类型: {p}"
         # 允许直接传 dict（如从 YAML 构造）时自动转成配置对象
