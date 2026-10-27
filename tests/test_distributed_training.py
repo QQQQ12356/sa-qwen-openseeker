@@ -71,6 +71,51 @@ def test_sdpa_preserves_loss_gradients_and_compressed_memory(factory, position):
             torch.testing.assert_close(value, other_value)
 
 
+@pytest.mark.parametrize("factory", [tiny_qwen3, _tiny_model])
+@pytest.mark.parametrize("position", ["append", "intersect"])
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_sdpa_bf16_aligns_mask_and_backpropagates(monkeypatch, factory, position, device):
+    if device == "cuda" and (
+        not torch.cuda.is_available() or not torch.cuda.is_bf16_supported()
+    ):
+        pytest.skip("Requires a CUDA GPU with BF16 support")
+    model = factory().to(device=device, dtype=torch.bfloat16).train()
+    config = copy.deepcopy(model.beacon_config)
+    config.beacon_information_mode = "whole"
+    config.beacon_window_enabled = False
+    config.beacon_keep_window = 0
+    config.beacon_pos = position
+    config.beacon_attention_backend = "sdpa"
+    config.beacon_readout_distill_weight = 0
+    config.beacon_output_distill_weight = 0
+    model.set_beacon_config(config)
+    sdpa = torch.nn.functional.scaled_dot_product_attention
+    calls = []
+
+    def checked_sdpa(query, key, value, *, attn_mask=None, **kwargs):
+        # CPU SDPA accepts FP32 masks with BF16 queries, whereas the CUDA
+        # memory-efficient kernel rejects them. Check the contract on CPU too.
+        assert query.dtype == key.dtype == value.dtype == torch.bfloat16
+        assert attn_mask is not None
+        assert attn_mask.dtype == query.dtype
+        assert attn_mask.device == query.device
+        assert (attn_mask == 0).any() and (attn_mask < 0).any()
+        calls.append(query.shape)
+        return sdpa(query, key, value, attn_mask=attn_mask, **kwargs)
+
+    monkeypatch.setattr(torch.nn.functional, "scaled_dot_product_attention", checked_sdpa)
+    ids = torch.arange(10, 28, device=device).unsqueeze(0)
+    labels = ids.clone()
+    labels[:, 2:8] = -100
+    labels[:, 11:15] = -100
+    loss = model(input_ids=ids, labels=labels, regions=[(2, 8), (11, 15)]).loss
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert len(calls) >= 5  # prefix, two compressed regions, intervening keeps
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads and all(torch.isfinite(grad).all() for grad in grads)
+
+
 def test_adapter_save_preserves_beacon_and_lora_weights(tmp_path):
     from peft import LoraConfig, PeftModel, get_peft_model
     model = get_peft_model(_tiny_model(), LoraConfig(r=2, target_modules=["q_proj", "v_proj"]))

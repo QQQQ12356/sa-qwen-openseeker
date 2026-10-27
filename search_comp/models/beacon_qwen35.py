@@ -245,9 +245,16 @@ class BeaconQwen3Attention(Qwen3_5Attention):
             value_states = value_states.repeat_interleave(g, dim=1)
 
         if getattr(self.config, "beacon_attention_backend", "eager") == "sdpa":
+            sdpa_mask = None
+            if attention_mask is not None:
+                sdpa_mask = attention_mask[:, :, :, :key_states.shape[-2]]
+                # CUDA memory-efficient SDPA requires floating-point bias to
+                # match Q/K/V dtype; Beacon builds its causal mask in FP32.
+                mask_dtype = torch.bool if sdpa_mask.dtype == torch.bool else query_states.dtype
+                sdpa_mask = sdpa_mask.to(device=query_states.device, dtype=mask_dtype)
             attn_output = F.scaled_dot_product_attention(
                 query_states, key_states, value_states,
-                attn_mask=attention_mask[:, :, :, :key_states.shape[-2]] if attention_mask is not None else None,
+                attn_mask=sdpa_mask,
                 dropout_p=self.attention_dropout if self.training else 0.0,
                 scale=self.scaling,
             )
