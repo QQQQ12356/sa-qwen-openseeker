@@ -13,6 +13,7 @@
 - [OpenSeeker 分段损失](docs/openseeker_loss_segments.md)：分别配置思考、工具调用、原始回答和最终答案的训练权重。
 - [最终精简答案协议](docs/openseeker_final_answer.md)：`final_answer` 训练目标、数据升级及评测提取。
 - [离线轨迹 HTML 报告](docs/predictions_html.md)：统一转换评测 JSONL，浏览问题、答案、轨迹和指标。
+- [数据集 HTML 浏览器](docs/dataset_html.md)：一键查看训练数据、工具观测、长度统计和无观测样本。
 - [原项目文档](docs/README.md)：原有 Search-R1 和压缩算法说明。
 
 ## 已生成的数据

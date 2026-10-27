@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数据集轨迹浏览器</title>
+<style>
+:root{--bg:#f4f6fa;--ink:#24344c;--muted:#69798e;--line:#dfe5ef;--accent:#315fcb}*{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--bg);font:14px/1.65 system-ui,"Microsoft YaHei",sans-serif}header{padding:26px 32px;background:#fff;border-bottom:1px solid var(--line)}h1{margin:0;font-size:24px}h2{font-size:17px;margin:0 0 12px}small,.muted{color:var(--muted)}#source{overflow-wrap:anywhere}#stats{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}.stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 18px;min-width:145px}.stat strong{display:block;font-size:24px}.stat span{color:var(--muted);font-size:12px}.workspace{max-width:1600px;padding:0 24px 32px;margin:auto}.toolbar,.nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}input,select,button{font:inherit;color:inherit;border:1px solid var(--line);padding:8px 12px;background:white;border-radius:7px}button,summary{cursor:pointer}button:disabled{opacity:.45;cursor:default}input{flex:1;min-width:200px}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #9bb8fb;outline-offset:2px}main{display:grid;grid-template-columns:290px minmax(0,1fr);gap:20px}aside{position:sticky;top:12px;align-self:start}#list{max-height:72vh;overflow:auto;display:grid;gap:8px;padding:2px}.item{text-align:left;width:100%;padding:12px}.item.active{border-color:var(--accent);background:#edf3ff}.preview{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;margin:6px 0}.tag{display:inline-block;border-radius:4px;background:#edf1f8;padding:2px 6px;margin:3px;font-size:11px}.zero{background:#fff0d7;color:#875b16}.card{padding:20px;background:#fff;border:1px solid var(--line);border-radius:11px;margin-bottom:14px;min-width:0}.content,pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;margin:0;font:inherit}pre{font:12px/1.7 ui-monospace,monospace}.message{border:1px solid var(--line);border-radius:9px;margin:12px 0;overflow:hidden}.message>summary{padding:12px 15px;background:#f6f8fc;font-weight:600}.body{padding:15px}.part{border-left:3px solid #cbd5e5;padding:10px 14px;margin:10px 0;background:#f7f9fc}.part.think{border-color:#b0a1ce;background:#f8f5fb}.part.call{border-color:#819de2;background:#f1f5ff}.part.observation{border-color:#73af9f;background:#eef8f4}.part.answer{border-color:#d4b966;background:#fffae9}.label{font-size:11px;font-weight:650;color:var(--muted);margin-bottom:7px;letter-spacing:.5px}.id{overflow-wrap:anywhere}.meta{margin:12px 0}.empty{text-align:center;padding:50px;color:var(--muted)}#listpage{justify-content:center;font-size:12px}.note{font-size:12px;color:var(--muted);margin-top:10px}details>summary{overflow-wrap:anywhere}#manifest{margin-top:15px}@media(max-width:850px){main{grid-template-columns:1fr}aside{position:static}#list{max-height:230px}.workspace{padding:0 12px 24px}header{padding:20px}.stat{min-width:120px;padding:9px 12px}}
+</style>
+</head>
+<body>
+<header><small>DATASET INSPECTOR · OFFLINE</small><h1 id="title"></h1><div id="source" class="muted"></div><div class="note">绿色块为观测正文；字符数不是 token 数。此页面不运行 tokenizer，也不替代训练数据校验。</div><details id="manifest"><summary>数据集 Manifest</summary><pre id="manifestText"></pre></details></header>
+<div class="workspace"><div id="stats"></div><div class="toolbar"><input id="search" type="search" aria-label="全文搜索" placeholder="搜索 ID、问题、答案或完整轨迹…"><select id="observation" aria-label="观测筛选"><option value="all">全部观测情况</option><option value="zero">无非空观测正文</option><option value="some">包含观测正文</option></select><select id="role" aria-label="消息角色"><option value="all">显示全部角色</option><option value="user">仅 user</option><option value="assistant">仅 assistant</option><option value="tool">仅原始 tool</option><option value="system">仅 system</option></select></div>
+<main><aside><div id="count" class="muted"></div><div id="list"></div><div id="listpage" class="nav"><button id="pagePrev">上一页</button><span id="page"></span><button id="pageNext">下一页</button></div></aside><article><div class="nav"><button id="prev">上一条</button><button id="next">下一条</button><button id="expand">展开消息</button><button id="collapse">折叠消息</button><span id="position" class="muted"></span></div><div id="detail"></div></article></main></div>
+<script id="dataset-data" type="application/json">__DATASET_DATA__</script>
+<script>
+'use strict';
+const report=JSON.parse(document.getElementById('dataset-data').textContent);
+const records=report.records, $=id=>document.getElementById(id);
+const text=value=>typeof value==='string'?value:JSON.stringify(value??'',null,2);
+function el(tag,cls='',value){const n=document.createElement(tag);n.className=cls;if(value!==undefined)n.textContent=text(value);return n;}
+function pretty(value){if(typeof value!=='string')return text(value);try{return JSON.stringify(JSON.parse(value),null,2);}catch{return value;}}
+let visible=records.map((_,i)=>i),selected=visible[0]??null,page=0;
+const pageSize=50,searchText=records.map(r=>JSON.stringify(r.raw).toLowerCase());
+$('title').textContent=report.title;document.title=report.title;
+$('source').textContent=`${report.source}${report.split?' · '+report.split:''} · 跳过 ${report.offset} 条 · ${report.limit?'最多 '+report.limit+' 条':'全部导出'}`;
+$('manifest').hidden=report.manifest===null;$('manifestText').textContent=text(report.manifest);
+function stat(label,value){const n=el('div','stat');n.append(el('strong','',value),el('span','',label));$('stats').append(n);}
+function updateStats(){ $('stats').replaceChildren();stat('当前匹配 / 导出样本',`${visible.length} / ${records.length}`);stat('无非空观测正文',visible.filter(i=>records[i].observations.length===0).length);stat('观测块数',visible.reduce((s,i)=>s+records[i].observations.length,0));stat('观测正文字符总数',visible.reduce((s,i)=>s+records[i].observation_chars,0).toLocaleString());}
+function applyFilters(){const term=$('search').value.trim().toLowerCase(),kind=$('observation').value;visible=records.map((_,i)=>i).filter(i=>(!term||searchText[i].includes(term))&&(kind==='all'||(kind==='zero'?records[i].observations.length===0:records[i].observations.length>0)));if(!visible.includes(selected))selected=visible[0]??null;page=Math.max(0,Math.floor(visible.indexOf(selected)/pageSize));updateStats();drawList();drawDetail();}
+function drawList(){ $('list').replaceChildren();$('count').textContent=`匹配 ${visible.length} 条`;for(const i of visible.slice(page*pageSize,(page+1)*pageSize)){const r=records[i],b=el('button','item'+(i===selected?' active':''));b.append(el('small','id',r.id),el('div','preview',r.question||'（无问题字段）'),el('span','tag'+(r.observations.length?'':' zero'),`${r.observations.length} 个观测块`));b.onclick=()=>{selected=i;drawList();drawDetail();};$('list').append(b);}$('page').textContent=`${page+1} / ${Math.max(1,Math.ceil(visible.length/pageSize))}`;$('pagePrev').disabled=page===0;$('pageNext').disabled=(page+1)*pageSize>=visible.length;}
+function card(title,value){const n=el('section','card');n.append(el('h2','',title));if(value!==undefined)n.append(el('div','content',value));return n;}
+function part(parent,label,value,kind=''){const n=el('section','part '+kind);n.append(el('div','label',label),el('div','content',value));parent.append(n);}
+function messageBody(parent,m,index,r){const content=text(m.content??'');
+  // Parse tags only in their appropriate role; quoted tags in system prompts
+  // and retrieved pages stay literal text. All dataset values use textContent.
+  if(m.role==='assistant'){
+    const pattern=/<(think|thinking|tool_call|search|final_answer|answer)>([\s\S]*?)<\/\1>/g;let end=0,match;
+    while((match=pattern.exec(content))!==null){if(content.slice(end,match.index).trim())part(parent,'正文',content.slice(end,match.index));const tag=match[1],kind=['think','thinking'].includes(tag)?'think':['tool_call','search'].includes(tag)?'call':'answer';part(parent,tag,tag==='tool_call'?pretty(match[2]):match[2],kind);end=pattern.lastIndex;}if(content.slice(end).trim())part(parent,'正文',content.slice(end));
+    if(m.reasoning_content||m.reasoning)part(parent,'reasoning',m.reasoning_content||m.reasoning,'think');
+    if(m.tool_calls)part(parent,'结构化工具调用',pretty(m.tool_calls),'call');
+  }else if(r.observations.some(o=>o.message===index)){
+    if(m.role==='tool'){part(parent,'原始 tool 结果（未运行归一化）',content,'observation');}
+    else{const pattern=/<(tool_response|information)>([\s\S]*?)<\/\1>/g;let end=0,match;while((match=pattern.exec(content))!==null){if(content.slice(end,match.index).trim())part(parent,'正文',content.slice(end,match.index));part(parent,`${match[1]} · ${Array.from(match[2]).length} 字符`,match[2],'observation');end=pattern.lastIndex;}if(content.slice(end).trim())part(parent,'正文',content.slice(end));}
+  }else{parent.append(el('div','content',content));}
+  const raw=el('details');raw.append(el('summary','','原始消息 JSON'),el('pre','',JSON.stringify(m,null,2)));parent.append(raw);
+}
+function drawDetail(){const target=$('detail');target.replaceChildren();const pos=visible.indexOf(selected);$('prev').disabled=pos<=0;$('next').disabled=pos<0||pos>=visible.length-1;$('position').textContent=pos<0?'':`${pos+1} / ${visible.length}`;if(selected===null){target.append(el('div','card empty','没有匹配样本'));return;}const r=records[selected],meta=card(r.id);meta.append(el('div','muted',`${r.source}:${r.line}`),el('span','tag',`${r.messages.length} 条消息`),el('span','tag'+(r.observations.length?'':' zero'),`${r.observations.length} 个非空观测块 · ${r.observation_chars} 字符`),el('span','tag',r.raw.protocol||'未标注协议'));target.append(meta,card('问题',r.question),card('参考答案',r.raw.answer??r.raw.answers??'（缺失）'));
+  const metadata=card('数据记录与长度统计');metadata.append(el('pre','',JSON.stringify(Object.fromEntries(Object.entries(r.raw).filter(([k])=>!['messages','trajectory','tools','question','answer','answers'].includes(k))),null,2)));metadata.append(el('div','note','lengths 是数据文件原有的 token 统计；观测块按文本标记识别，未重新分词。原始 tool 消息只展示工具结果，不保证其归一化后可用于训练。'));target.append(metadata);
+  const trajectory=card('消息轨迹');let displayed=0;r.messages.forEach((m,index)=>{if($('role').value!=='all'&&m.role!==$('role').value)return;displayed++;const d=el('details','message');d.open=m.role!=='system';d.append(el('summary','',`${index+1} · ${m.role??'unknown'} · ${Array.from(text(m.content??'')).length} 字符`));const body=el('div','body');messageBody(body,m,index,r);d.append(body);trajectory.append(d);});if(!displayed)trajectory.append(el('div','muted','没有该角色的消息'));target.append(trajectory);
+  const raw=el('details','card');raw.append(el('summary','','完整原始记录 JSON（保留全部字段）'));raw.addEventListener('toggle',()=>{if(raw.open&&raw.children.length===1)raw.append(el('pre','',JSON.stringify(r.raw,null,2)));});target.append(raw);
+}
+function move(delta){const pos=visible.indexOf(selected)+delta;if(pos<0||pos>=visible.length)return;selected=visible[pos];page=Math.floor(pos/pageSize);drawList();drawDetail();}
+$('prev').onclick=()=>move(-1);$('next').onclick=()=>move(1);$('pagePrev').onclick=()=>{page--;drawList();};$('pageNext').onclick=()=>{page++;drawList();};
+let debounce;$('search').oninput=()=>{clearTimeout(debounce);debounce=setTimeout(applyFilters,150);};$('observation').onchange=applyFilters;$('role').onchange=drawDetail;
+for(const [id,open] of [['expand',true],['collapse',false]])$(id).onclick=()=>document.querySelectorAll('.message').forEach(n=>{n.open=open;});
+applyFilters();
+</script>
+</body></html>
